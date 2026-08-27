@@ -1,0 +1,48 @@
+{
+  "name": "Goose",
+  "bundleIdentifier": "io.goose.dev",
+  "executableName": "goose",
+  "knownPaths": [
+    {
+      "relativePath": "Library/Application Support/Goose",
+      "category": "applicationData",
+      "description": "Main app support folder."
+    },
+    {
+      "relativePath": "Library/Caches/Goose",
+      "category": "cache",
+      "description": "Cache directory."
+    },
+    {
+      "relativePath": "Library/Preferences/io.goose.dev.plist",
+      "category": "preferences",
+      "description": "Preferences."
+    },
+    {
+      "relativePath": ".cache/goose",
+      "category": "cache",
+      "description": "Local cache."
+    },
+    {
+      "relativePath": ".config/goose",
+      "category": "applicationData",
+      "description": "Configuration data."
+    }
+  ],
+  "filePatterns": [],
+  "keywords": [
+    "goose",
+    "io.goose",
+    "goose-dev"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch",
+    "executableMatch"
+  ],
+  "installMethod": "directDownload",
+  "documentationURL": "https://block.github.io/goose/",
+  "homepageURL": "https://block.github.io/goose/",
+  "category": "ai",
+  "description": "Goose by Block \u2014 a local AI coding assistant."
+}

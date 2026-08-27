@@ -1,0 +1,37 @@
+##*.swiftdoc
+##*.swiftinterface
+##*.sourcekit
+##*.xcuserdata
+##*.xcconfig
+##Generated files
+
+# Xcode
+build/
+DerivedData/
+*.xcworkspace/
+*.xcodeproj/
+!Scrub99.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Compiled
+*.o
+*.a
+*.dylib
+*.so
+*.app/
+*.xcarchive/
+dist/
+
+# Preserved local prototypes and superseded rule copies
+Scrub99/Sources/Scanner/Scanner.swift
+Scrub99/Sources/Cleanup/CleanupEngine.swift
+Scrub99/Sources/main.swift
+Scrub99/Resources/*.json

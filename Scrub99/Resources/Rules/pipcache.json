@@ -1,0 +1,31 @@
+{
+  "name": "Python Pip Cache",
+  "bundleIdentifier": null,
+  "executableName": "pip",
+  "knownPaths": [
+    {
+      "relativePath": ".cache/pip",
+      "category": "shared",
+      "description": "pip package cache \u2014 shared by all Python projects."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*.whl",
+      "directory": ".cache/pip",
+      "category": "downloadedModels",
+      "description": "Python wheel files cached by pip"
+    }
+  ],
+  "keywords": [
+    "pip-cache",
+    ".cache/pip",
+    "pip-wheel-metadata"
+  ],
+  "confidenceBoosters": [
+    "appNameMatch"
+  ],
+  "installMethod": null,
+  "category": "system",
+  "description": "pip package cache \u2014 shared by multiple Python projects."
+}

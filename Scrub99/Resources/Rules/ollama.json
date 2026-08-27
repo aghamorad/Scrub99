@@ -1,0 +1,60 @@
+{
+  "name": "Ollama",
+  "bundleIdentifier": "io.ollama.ollama",
+  "executableName": "ollama",
+  "knownPaths": [
+    {
+      "relativePath": ".ollama/models",
+      "category": "downloadedModels",
+      "description": "Primary model storage. Contains downloaded language models. Very large."
+    },
+    {
+      "relativePath": ".ollama/helpers",
+      "category": "applicationData",
+      "description": "Helper executables and components."
+    },
+    {
+      "relativePath": "Library/Application Support/Ollama",
+      "category": "applicationData",
+      "description": "Application support data."
+    },
+    {
+      "relativePath": "Library/Caches/Ollama",
+      "category": "cache",
+      "description": "Cache directory."
+    },
+    {
+      "relativePath": "Library/Preferences/io.ollama.ollama.plist",
+      "category": "preferences",
+      "description": "Preferences."
+    },
+    {
+      "relativePath": "Library/Logs/Ollama",
+      "category": "logs",
+      "description": "Log files."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*",
+      "directory": ".ollama/models",
+      "category": "downloadedModels",
+      "description": "Ollama model files"
+    }
+  ],
+  "keywords": [
+    "ollama",
+    "ollama-models",
+    "libllama",
+    "llama.cpp"
+  ],
+  "confidenceBoosters": [
+    "appNameMatch",
+    "executableMatch"
+  ],
+  "installMethod": "directDownload",
+  "documentationURL": "https://ollama.com/",
+  "homepageURL": "https://ollama.com/",
+  "category": "ai",
+  "description": "Ollama \u2014 a framework for running large language models locally."
+}

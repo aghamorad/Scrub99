@@ -1,0 +1,29 @@
+{
+  "name": "UV Cache",
+  "bundleIdentifier": null,
+  "executableName": "uv",
+  "knownPaths": [
+    {
+      "relativePath": ".cache/uv",
+      "category": "shared",
+      "description": "uv package cache \u2014 shared by all Python projects using uv."
+    },
+    {
+      "relativePath": ".local/share/uv",
+      "category": "shared",
+      "description": "uv local share data."
+    }
+  ],
+  "filePatterns": [],
+  "keywords": [
+    "uv-cache",
+    "uv-downloads",
+    ".cache/uv"
+  ],
+  "confidenceBoosters": [
+    "appNameMatch"
+  ],
+  "installMethod": null,
+  "category": "system",
+  "description": "uv package cache \u2014 the faster Python package manager's cache."
+}

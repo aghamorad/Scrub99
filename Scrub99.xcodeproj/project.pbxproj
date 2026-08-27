@@ -1,0 +1,330 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001 /* Scrub99App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001; };
+		A1000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002; };
+		A1000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003; };
+		A1000004 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004; };
+		A1000005 /* RetroStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005; };
+		A1000006 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006; };
+		A1000007 /* ApplicationRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007; };
+		A1000008 /* RuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008; };
+		A1000010 /* Classifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010; };
+		A1000012 /* GlobMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012; };
+		A1000013 /* claude.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000013; };
+		A1000014 /* ollama.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000014; };
+		A1000015 /* goose.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000015; };
+		A1000016 /* chatgpt.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000016; };
+		A1000017 /* huggingface.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000017; };
+		A1000018 /* lmstudio.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000018; };
+		A1000019 /* pipcache.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000019; };
+		A1000020 /* uv.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000020; };
+		A1000021 /* CleanupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021; };
+		A1000022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022; };
+		A1000023 /* BoundedScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023; };
+		A1000024 /* SafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024; };
+		A1000025 /* SafeCleanupEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025; };
+		A1000026 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026; };
+		A1000027 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027; };
+		A1000028 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A2000028; };
+		A1000029 /* ResultsSorting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A2000001 /* Scrub99App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Scrub99App.swift; sourceTree = "<group>"; };
+		A2000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/AppDelegate.swift; sourceTree = "<group>"; };
+		A2000003 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/ContentView.swift; sourceTree = "<group>"; };
+		A2000004 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/AppState.swift; sourceTree = "<group>"; };
+		A2000005 /* RetroStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/RetroStyles.swift; sourceTree = "<group>"; };
+		A2000006 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Core/Models.swift; sourceTree = "<group>"; };
+		A2000007 /* ApplicationRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Core/ApplicationRules.swift; sourceTree = "<group>"; };
+		A2000008 /* RuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Core/RuleEngine.swift; sourceTree = "<group>"; };
+		A2000010 /* Classifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Classifier/Classifier.swift; sourceTree = "<group>"; };
+		A2000012 /* GlobMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Core/GlobMatcher.swift; sourceTree = "<group>"; };
+		A2000013 /* claude.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/claude.json; sourceTree = "<group>"; };
+		A2000014 /* ollama.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/ollama.json; sourceTree = "<group>"; };
+		A2000015 /* goose.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/goose.json; sourceTree = "<group>"; };
+		A2000016 /* chatgpt.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/chatgpt.json; sourceTree = "<group>"; };
+		A2000017 /* huggingface.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/huggingface.json; sourceTree = "<group>"; };
+		A2000018 /* lmstudio.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/lmstudio.json; sourceTree = "<group>"; };
+		A2000019 /* pipcache.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/pipcache.json; sourceTree = "<group>"; };
+		A2000020 /* uv.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/uv.json; sourceTree = "<group>"; };
+		A2000021 /* CleanupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/CleanupView.swift; sourceTree = "<group>"; };
+		A2000022 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/SettingsView.swift; sourceTree = "<group>"; };
+		A2000023 /* BoundedScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Scanner/BoundedScanner.swift; sourceTree = "<group>"; };
+		A2000024 /* SafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Cleanup/SafetyPolicy.swift; sourceTree = "<group>"; };
+		A2000025 /* SafeCleanupEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Cleanup/SafeCleanupEngine.swift; sourceTree = "<group>"; };
+		A2000026 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Cleanup/CleanupModels.swift; sourceTree = "<group>"; };
+		A2000027 /* ScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Scanner/ScanModels.swift; sourceTree = "<group>"; };
+		A2000028 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = Resources/AppIcon.icns; sourceTree = "<group>"; };
+		A2000029 /* ResultsSorting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/ResultsSorting.swift; sourceTree = "<group>"; };
+		A3000001 /* Scrub99.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scrub99.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A6000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A7000001 /* Root */ = {
+			isa = PBXGroup;
+			children = (
+				A7000002 /* Scrub99 */,
+				A7000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A7000002 /* Scrub99 */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001,
+				A2000002,
+				A2000003,
+				A2000004,
+				A2000005,
+				A2000006,
+				A2000007,
+				A2000008,
+				A2000010,
+				A2000012,
+				A3000002,
+				A2000013,
+				A2000014,
+				A2000015,
+				A2000016,
+				A2000017,
+				A2000018,
+				A2000019,
+				A2000020,
+				A2000021,
+				A2000022,
+				A2000023,
+				A2000024,
+				A2000025,
+				A2000026,
+				A2000027,
+				A2000028,
+				A2000029,
+			);
+			path = Scrub99;
+			sourceTree = "<group>";
+		};
+		A7000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A3000001,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A8000001 /* Scrub99 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A9000001;
+			buildPhases = (
+				A6000002,
+				A6000001,
+				A6000003,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Scrub99;
+			productName = Scrub99;
+			productReference = A3000001;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A8000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = A9000002;
+			compatibilityVersion = "Xcode 14.0";
+			mainGroup = A7000001;
+			productRefGroup = A7000003;
+			projectRoot = "";
+			targets = (
+				A8000001,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A6000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001,
+				A1000002,
+				A1000003,
+				A1000004,
+				A1000005,
+				A1000006,
+				A1000007,
+				A1000008,
+				A1000010,
+				A1000012,
+				A1000021,
+				A1000022,
+				A1000023,
+				A1000024,
+				A1000025,
+				A1000026,
+				A1000027,
+				A1000029,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A6000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000013,
+				A1000014,
+				A1000015,
+				A1000016,
+				A1000017,
+				A1000018,
+				A1000019,
+				A1000020,
+				A1000028,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A9000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1";
+			VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A9000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_FAST_OBJC_DISPATCH = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		A9000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Scrub99/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.scrub99.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		A9000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Scrub99/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.scrub99.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A9000001 /* Build configuration list for PBXNativeTarget "Scrub99" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A9000001,
+				A9000002,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A9000002 /* Build configuration list for PBXProject "Scrub99" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A9000003,
+				A9000004,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = A8000002 /* Project object */;
+}

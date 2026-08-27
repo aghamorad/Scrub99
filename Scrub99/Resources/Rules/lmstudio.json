@@ -1,0 +1,56 @@
+{
+  "name": "LM Studio",
+  "bundleIdentifier": "com.lmstudio.lmstudio",
+  "executableName": "lmstudio",
+  "knownPaths": [
+    {
+      "relativePath": "Library/Application Support/lmstudio",
+      "category": "applicationData",
+      "description": "Main app support. Contains downloaded models and settings."
+    },
+    {
+      "relativePath": "Library/Caches/com.lmstudio.lmstudio",
+      "category": "cache",
+      "description": "LM Studio cache."
+    },
+    {
+      "relativePath": "Library/Preferences/com.lmstudio.lmstudio.plist",
+      "category": "preferences",
+      "description": "LM Studio preferences."
+    },
+    {
+      "relativePath": "Library/Logs/LM Studio",
+      "category": "logs",
+      "description": "LM Studio log files."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*.gguf",
+      "directory": null,
+      "category": "downloadedModels",
+      "description": "GGUF format model files"
+    },
+    {
+      "pattern": "*.bin",
+      "directory": "Application Support/lmstudio",
+      "category": "downloadedModels",
+      "description": "Model binary files"
+    }
+  ],
+  "keywords": [
+    "lmstudio",
+    "lm-studio",
+    "com.lmstudio"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch",
+    "executableMatch"
+  ],
+  "installMethod": "directDownload",
+  "documentationURL": "https://lmstudio.ai/docs",
+  "homepageURL": "https://lmstudio.ai/",
+  "category": "ai",
+  "description": "LM Studio \u2014 a desktop application for running and managing local LLMs."
+}

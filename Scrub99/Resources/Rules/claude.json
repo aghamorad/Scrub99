@@ -1,0 +1,102 @@
+{
+  "name": "Claude",
+  "bundleIdentifier": "com.anthropic.claude",
+  "executableName": "Claude",
+  "knownPaths": [
+    {
+      "relativePath": "Library/Application Support/Claude",
+      "category": "applicationData",
+      "description": "Main app support. Contains databases, models, persistent data."
+    },
+    {
+      "relativePath": "Library/Caches/com.anthropic.claude",
+      "category": "cache",
+      "description": "Cache directory. Temporary data that can be safely recreated."
+    },
+    {
+      "relativePath": "Library/Preferences/com.anthropic.claude.plist",
+      "category": "preferences",
+      "description": "Preferences and settings file."
+    },
+    {
+      "relativePath": "Library/Logs/Claude",
+      "category": "logs",
+      "description": "Log files."
+    },
+    {
+      "relativePath": "Library/Saved Application State/com.anthropic.claude.savedState",
+      "category": "applicationData",
+      "description": "Saved app state."
+    },
+    {
+      "relativePath": "Library/Containers/com.anthropic.claude",
+      "category": "applicationData",
+      "description": "Sandbox container."
+    },
+    {
+      "relativePath": "Library/Group Containers/com.anthropic.claude",
+      "category": "applicationData",
+      "description": "Shared container."
+    },
+    {
+      "relativePath": "Claude",
+      "category": "projectData",
+      "description": "User-created Claude projects and workspaces. Protected from cleanup.",
+      "inventoryDepth": 1
+    },
+    {
+      "relativePath": "Documents/Claude",
+      "category": "projectData",
+      "description": "User-created Claude projects under Documents. Protected from cleanup.",
+      "inventoryDepth": 1
+    },
+    {
+      "relativePath": ".claude",
+      "category": "applicationData",
+      "description": "Claude Code configuration, sessions, commands, and local state. Protected from cleanup.",
+      "inventoryDepth": 1
+    },
+    {
+      "relativePath": ".claude-vision",
+      "category": "applicationData",
+      "description": "Claude-related local vision data. Protected from cleanup.",
+      "inventoryDepth": 1
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*.sqlite",
+      "directory": "Application Support/Claude",
+      "category": "conversationData",
+      "description": "Local conversation database"
+    },
+    {
+      "pattern": "*.sqlite-wal",
+      "directory": "Application Support/Claude",
+      "category": "conversationData",
+      "description": "SQLite WAL for conversations"
+    },
+    {
+      "pattern": "*.sqlite-shm",
+      "directory": "Application Support/Claude",
+      "category": "conversationData",
+      "description": "SQLite shared memory"
+    }
+  ],
+  "keywords": [
+    "claude",
+    "anthropic",
+    "com.anthropic"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch",
+    "executableMatch",
+    "plistFile"
+  ],
+  "installMethod": "directDownload",
+  "documentationURL": "https://docs.anthropic.com/",
+  "homepageURL": "https://anthropic.com/",
+  "category": "ai",
+  "description": "Claude by Anthropic \u2014 an AI assistant application."
+}

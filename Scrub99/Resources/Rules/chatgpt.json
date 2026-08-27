@@ -1,0 +1,57 @@
+{
+  "name": "ChatGPT",
+  "bundleIdentifier": "com.openai.chat",
+  "executableName": "ChatGPT",
+  "knownPaths": [
+    {
+      "relativePath": "Library/Application Support/chatgpt",
+      "category": "applicationData",
+      "description": "Application support. Contains local database and user data."
+    },
+    {
+      "relativePath": "Library/Caches/com.openai.chat",
+      "category": "cache",
+      "description": "ChatGPT cache."
+    },
+    {
+      "relativePath": "Library/Preferences/com.openai.chat.plist",
+      "category": "preferences",
+      "description": "ChatGPT preferences."
+    },
+    {
+      "relativePath": "Library/Logs/OpenAI",
+      "category": "logs",
+      "description": "OpenAI/ChatGPT log files."
+    },
+    {
+      "relativePath": "Library/Saved Application State/com.openai.chat.savedState",
+      "category": "applicationData",
+      "description": "ChatGPT saved state."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*.sqlite",
+      "directory": "Application Support/chatgpt",
+      "category": "conversationData",
+      "description": "Local conversation database"
+    }
+  ],
+  "keywords": [
+    "chatgpt",
+    "openai",
+    "com.openai",
+    "openai-corp"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch",
+    "executableMatch",
+    "plistFile"
+  ],
+  "installMethod": "directDownload",
+  "documentationURL": "https://help.openai.com/",
+  "homepageURL": "https://openai.com/",
+  "category": "ai",
+  "description": "ChatGPT by OpenAI \u2014 the official ChatGPT desktop application."
+}

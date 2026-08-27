@@ -1,0 +1,55 @@
+{
+  "name": "Hugging Face",
+  "bundleIdentifier": null,
+  "executableName": null,
+  "knownPaths": [
+    {
+      "relativePath": ".cache/huggingface",
+      "category": "shared",
+      "description": "Hugging Face Hub cache \u2014 shared by multiple applications."
+    },
+    {
+      "relativePath": ".local/share/huggingface",
+      "category": "shared",
+      "description": "Hugging Face local share data."
+    },
+    {
+      "relativePath": "Library/Application Support/huggingface",
+      "category": "applicationData",
+      "description": "Hugging Face application support."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "*.safetensors",
+      "directory": null,
+      "category": "downloadedModels",
+      "description": "Safetensors model files"
+    },
+    {
+      "pattern": "model-*.py",
+      "directory": null,
+      "category": "downloadedModels",
+      "description": "Model Python files"
+    },
+    {
+      "pattern": "model.safetensors.index.json",
+      "directory": null,
+      "category": "downloadedModels",
+      "description": "Model index file"
+    }
+  ],
+  "keywords": [
+    "huggingface",
+    "hugging_face",
+    "hf-",
+    "transformers",
+    "datasets"
+  ],
+  "confidenceBoosters": [
+    "appNameMatch"
+  ],
+  "installMethod": null,
+  "category": "ai",
+  "description": "Hugging Face \u2014 shared model cache used by many AI applications."
+}
