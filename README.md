@@ -1,30 +1,43 @@
-# Scrub 99
+# Scrub99
 
-**Find leftovers from apps you no longer use.**
+I made Scrub99 because I kept having the same slightly ridiculous problem on my Mac: tens of gigabytes would disappear into Claude projects, local AI models, Hugging Face caches, Python environments, logs, and application folders, and I could never quite tell what was genuinely needed, what could be recreated, and what would be a terrible idea to delete. One of my own Claude folders was tens of gigabytes. The usual storage tools could tell me that a folder was large, of course, but “large” is not the same thing as unnecessary.
 
-A native macOS utility with a Mac OS 9-inspired interface that discovers, classifies, and safely removes leftover application data — with a special focus on the messy AI/ML ecosystem (Claude, Ollama, HuggingFace, LM Studio, Goose, etc.).
+Scrub99 is my attempt to make that whole business legible. It scans a defined set of places used by Claude, ChatGPT, Goose, Ollama, Hugging Face, LM Studio, pip, and uv, measures what is actually there, and then shows each result as something you can click and inspect. You can sort by size, category, item, or safety status. For each item, the app tries to answer the questions I wanted answered myself: what is this, why is it here, is it normally necessary, and what is the actual risk if I move it?
 
-The app uses an original retro utility icon: a platinum storage drawer, blue inspection lens, broom, and caution badge, supplied as a multi-resolution macOS ICNS resource.
+I also did not want to make one of those cleaners that announces that it has found “47 GB OF JUNK” in alarming red letters and then expects you to trust a single enormous Clean button. Scrub99 deliberately slows the process down. Nothing is selected automatically. Most personal data is inspection-only. When something genuinely low-risk is eligible for cleanup, you still review it one item at a time, read the explanation again, and decide whether to keep it or move it into Scrub99's reversible quarantine. The app does not permanently delete it.
 
-## Current implementation status
+The interface looks like an old Mac utility because I miss the peculiar honesty of those applications: they showed you files, paths, sizes, and consequences. They did not pretend the computer possessed mystical knowledge. The retro icon is original too, with a platinum storage drawer, blue inspection lens, broom, and caution badge.
 
-Scrub99 is an early safety milestone, not a finished cleaner. The current app performs a local, rule-backed audit of known application locations. Nothing is selected automatically. Only cache and log roots with a confirmed or very-likely application association can be moved, and only to Scrub99's reversible quarantine after explicit selection and confirmation. Direct Trash cleanup is disabled.
+[Download Scrub99 0.2.6](https://github.com/aghamorad/Scrub99/releases/tag/v0.2.6)
 
-The AI advisory provider is not connected yet. The deterministic scanner, path-safety policy, quarantine transaction log, and restore tests are intentionally in place first. A future model may explain and rank findings, but it will not be allowed to broaden cleanup eligibility or initiate a move.
+## What you actually do with it
 
-## Why Scrub 99?
+1. Open Scrub99 and start a scan.
+2. Sort the results, usually by size, and click any row that looks interesting.
+3. Read the full path, measured size, what the item belongs to, why it exists, and the app's safety judgment.
+4. Tick only the things you genuinely want to review for cleanup.
+5. Use **Clean Up Unnecessary Stuff…** to go through eligible low-risk caches and logs individually. Scrub99 asks again before each move.
+6. If you change your mind, use **Undo Last Quarantine**. Restore will refuse to overwrite anything already occupying the original path.
 
-AI applications are notorious for leaving massive amounts of data scattered across your Mac:
+## What this version can and cannot claim
 
-- **Downloaded models** — 5-40 GB each, often duplicated across tools
-- **Model caches** — shared directories like `~/.cache/huggingface`
-- **Python environments** — full Python installs with libraries
-- **Application data** — databases, preferences, logs, caches
-- **Orphaned remnants** — data left behind when you delete the app itself
+Scrub99 0.2.6 is an early safety milestone. It performs a local, rule-backed audit of known application locations; it does not claim to understand every file on your Mac, and it does not infer that two large model files are duplicates merely because their names look similar. Some folders may also be inaccessible because of macOS permissions.
 
-Dragging an app to the Trash removes the `.app` bundle. It does **not** remove the 14 GB of models it downloaded.
+There is no connected AI model in this release. That part comes later, if it can be added without handing an LLM the authority to quietly expand what counts as safe or move files by itself. The scanner, path-safety rules, quarantine records, explanations, and restore tests came first because, honestly, a cleanup app has to earn trust at the boring filesystem level before its “AI” opinions mean very much.
 
-Scrub 99 finds all of that.
+The downloadable build is for Apple-silicon Macs running macOS 13 or later. It is ad-hoc signed for local use and has not been Apple-notarized, so macOS may warn you when you first open it. The source is here for anyone who would prefer to inspect and build it themselves.
+
+## What it looks for
+
+AI and development applications can leave substantial material in several different places:
+
+- **Downloaded models:** model weights that may take many gigabytes and may be expensive to download again
+- **Model caches:** shared stores such as `~/.cache/huggingface`
+- **Python environments:** Python installations and libraries created for particular tools or projects
+- **Application data:** databases, preferences, histories, logs, and caches, which do not all carry the same risk
+- **Orphaned remnants:** support data that can remain after the visible `.app` bundle is removed
+
+Dragging an application to the Trash usually removes its `.app` bundle. It does not necessarily remove the models, caches, environments, or project data that application created elsewhere. Scrub99 audits the locations covered by its rule database and tells you what it can establish from local evidence; when it cannot establish enough, it says so and leaves the item alone.
 
 ## Features
 
@@ -56,12 +69,12 @@ Every discovered item is classified into categories:
 
 ### Safety
 
-- **Nothing is permanently deleted** — eligible items go only to Scrub99 Quarantine
-- **Nothing is auto-selected** — the user must select every eligible cache or log
-- **User data is never automatically removed** — conversations, credentials, projects are always unchecked
-- **Undo is recorded before the first move** — append-only manifests retain every cleanup transaction
-- **Running app detection** — refuses to clean live application data
-- **Conservative defaults** — false negatives are preferred over false positives
+- **Nothing is permanently deleted:** eligible items go only to Scrub99 Quarantine
+- **Nothing is auto-selected:** the user must select every eligible cache or log
+- **User data is never automatically removed:** conversations, credentials, projects are always unchecked
+- **Undo is recorded before the first move:** append-only manifests retain every cleanup transaction
+- **Running app detection:** refuses to clean live application data
+- **Conservative defaults:** false negatives are preferred over false positives
 
 ### Architecture
 
@@ -103,14 +116,14 @@ Scrub99/Sources/
 
 Applications are defined in JSON files under `Resources/Rules/`:
 
-- `claude.json` — Claude by Anthropic
-- `ollama.json` — Ollama
-- `goose.json` — Goose by Block
-- `chatgpt.json` — ChatGPT by OpenAI
-- `huggingface.json` — Hugging Face shared cache
-- `lmstudio.json` — LM Studio
-- `pipcache.json` — pip package cache
-- `uv.json` — uv package cache
+- `claude.json`: Claude by Anthropic
+- `ollama.json`: Ollama
+- `goose.json`: Goose by Block
+- `chatgpt.json`: ChatGPT by OpenAI
+- `huggingface.json`: Hugging Face shared cache
+- `lmstudio.json`: LM Studio
+- `pipcache.json`: pip package cache
+- `uv.json`: uv package cache
 
 Each rule defines:
 - Known paths (relative to standard locations)
@@ -122,7 +135,7 @@ Adding a new application is as simple as adding a JSON file.
 
 ## Building
 
-**Scrub 99 requires Xcode to build.** The Xcode license must be accepted on the Mac before `xcodebuild` will run.
+**Scrub99 requires Xcode to build.** The Xcode license must be accepted on the Mac before `xcodebuild` will run.
 
 1. Open `Scrub99.xcodeproj` in Xcode
 2. Select the `Scrub99` target
@@ -171,16 +184,16 @@ Distribution signing and notarization have not been completed. Scanning and clas
 
 ## Design Philosophy
 
-The Mac OS 9 interface is a deliberate choice. That era's utilities — Norton Utilities, StuffIt, ResEdit — were honest about what they found and conservative about what they changed. Scrub 99 follows that tradition:
+The Mac OS 9 interface is a deliberate choice. Utilities such as Norton Utilities, StuffIt, and ResEdit were honest about what they found and conservative about what they changed. Scrub99 follows that tradition:
 
-- **Explain what you find** — not "5 GB of junk" but "3 downloaded language models"
-- **Explain what you do** — not "cleanup complete" but "removed Ollama model, freed 8.2 GB"
-- **Never delete by default** — no result is pre-selected, including caches and logs
-- **Always reversible** — eligible cleanup goes to recoverable quarantine, and restore refuses to overwrite an existing path
+- **Explain what you find:** say "3 downloaded language models" instead of "5 GB of junk"
+- **Explain what you do:** say "removed Ollama model, freed 8.2 GB" instead of "cleanup complete"
+- **Never delete by default:** no result is pre-selected, including caches and logs
+- **Always reversible:** eligible cleanup goes to recoverable quarantine, and restore refuses to overwrite an existing path
 
 ## Version
 
-**Scrub 99 0.2.6** — Safety milestone with bounded scanning, protected workspace inventory, reversible quarantine, item explanations, full-row inspection, and sortable results
+**Scrub99 0.2.6:** Safety milestone with bounded scanning, protected workspace inventory, reversible quarantine, item explanations, full-row inspection, and sortable results
 
 Supported AI applications: Claude, ChatGPT, Goose, Ollama, HuggingFace, LM Studio
 
