@@ -206,6 +206,102 @@ final class CleanupEngine {
         try fileManager.moveItem(at: source, to: destination)
     }
 
+    func quarantineEntries() -> [QuarantineEntry] {
+        guard let manifests = try? manifestURLs() else { return [] }
+        return manifests.flatMap { manifestURL in
+            guard let data = try? Data(contentsOf: manifestURL),
+                  let manifest = try? decoder.decode(DurableManifest.self, from: data) else {
+                return [QuarantineEntry]()
+            }
+            return manifest.items.compactMap { item in
+                guard item.state == .moved,
+                      fileManager.fileExists(atPath: item.quarantinePath) else { return nil }
+                return QuarantineEntry(
+                    id: item.id,
+                    date: manifest.date,
+                    originalPath: item.originalPath,
+                    quarantinePath: item.quarantinePath,
+                    size: item.size,
+                    category: item.category,
+                    appName: item.appName,
+                    manifestURL: manifestURL
+                )
+            }
+        }
+        .sorted {
+            if $0.date == $1.date { return $0.originalPath < $1.originalPath }
+            return $0.date > $1.date
+        }
+    }
+
+    func restore(_ entry: QuarantineEntry) throws {
+        guard let loaded = loadManifest(containing: entry) else {
+            throw CleanupError.restoreError("The quarantine record could not be found.")
+        }
+        let manifestURL = loaded.0
+        var manifest = loaded.1
+        guard
+              let index = manifest.items.firstIndex(where: { $0.id == entry.id }) else {
+            throw CleanupError.restoreError("The quarantine record could not be found.")
+        }
+        let source = URL(fileURLWithPath: manifest.items[index].quarantinePath)
+        let destination = URL(fileURLWithPath: manifest.items[index].originalPath)
+        guard fileManager.fileExists(atPath: source.path) else {
+            throw CleanupError.restoreError("The quarantined item is missing.")
+        }
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            throw CleanupError.restoreError("Restore refused because the original path exists. Nothing was overwritten.")
+        }
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.moveItem(at: source, to: destination)
+        manifest.items[index].state = .restored
+        manifest.items[index].errorMessage = nil
+        try save(manifest, to: manifestURL)
+    }
+
+    func permanentlyDelete(_ entries: [QuarantineEntry]) throws -> PermanentDeletionResult {
+        var deleted: [QuarantineEntry] = []
+        var failed: [(QuarantineEntry, String)] = []
+        for entry in entries {
+            do {
+                guard let loaded = loadManifest(containing: entry) else {
+                    throw CleanupError.restoreError("The quarantine record could not be found.")
+                }
+                let manifestURL = loaded.0
+                var manifest = loaded.1
+                guard
+                      let index = manifest.items.firstIndex(where: { $0.id == entry.id }) else {
+                    throw CleanupError.restoreError("The quarantine record could not be found.")
+                }
+                let source = URL(fileURLWithPath: manifest.items[index].quarantinePath).standardizedFileURL
+                let rootComponents = quarantineURL.standardizedFileURL.pathComponents
+                guard source != quarantineURL.standardizedFileURL,
+                      source.pathComponents.starts(with: rootComponents),
+                      fileManager.fileExists(atPath: source.path) else {
+                    throw CleanupError.restoreError("The quarantined item is missing or outside Scrub99 Quarantine.")
+                }
+                try fileManager.removeItem(at: source)
+                manifest.items[index].state = .purged
+                manifest.items[index].errorMessage = nil
+                try save(manifest, to: manifestURL)
+                deleted.append(entry)
+            } catch {
+                failed.append((entry, error.localizedDescription))
+            }
+        }
+        return PermanentDeletionResult(deleted: deleted, failed: failed)
+    }
+
+    func revealQuarantine() {
+        NSWorkspace.shared.activateFileViewerSelecting([quarantineURL])
+    }
+
+    private func loadManifest(containing entry: QuarantineEntry) -> (URL, DurableManifest)? {
+        guard let data = try? Data(contentsOf: entry.manifestURL),
+              let manifest = try? decoder.decode(DurableManifest.self, from: data) else { return nil }
+        return (entry.manifestURL, manifest)
+    }
+
     internal func checkRunningApps(_ items: [FoundItem]) async throws -> [ApplicationRef] {
         let running = NSWorkspace.shared.runningApplications
         let runningIDs = Set(running.compactMap(\.bundleIdentifier))
@@ -226,7 +322,7 @@ final class CleanupEngine {
     var hasQuarantineItems: Bool {
         (try? allManifests().contains { manifest in
             manifest.items.contains { item in
-                (item.state == .moved || item.state == .planned) &&
+                item.state == .moved &&
                 fileManager.fileExists(atPath: item.quarantinePath)
             }
         }) == true
@@ -234,7 +330,7 @@ final class CleanupEngine {
 
     var quarantineTotalSize: Int64 {
         (try? allManifests().flatMap(\.items).filter { item in
-            (item.state == .moved || item.state == .planned) &&
+            item.state == .moved &&
             fileManager.fileExists(atPath: item.quarantinePath)
         }.reduce(0) { $0 + $1.size }) ?? 0
     }
@@ -298,6 +394,7 @@ private struct DurableItem: Codable {
         case moved
         case failed
         case restored
+        case purged
     }
 
     let id: UUID

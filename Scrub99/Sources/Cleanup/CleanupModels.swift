@@ -29,6 +29,26 @@ struct RestoreResult {
     let totalSize: Int64
 }
 
+struct QuarantineEntry: Identifiable, Equatable {
+    let id: UUID
+    let date: Date
+    let originalPath: String
+    let quarantinePath: String
+    let size: Int64
+    let category: String
+    let appName: String?
+    let manifestURL: URL
+
+    var existsInQuarantine: Bool {
+        FileManager.default.fileExists(atPath: quarantinePath)
+    }
+}
+
+struct PermanentDeletionResult {
+    let deleted: [QuarantineEntry]
+    let failed: [(QuarantineEntry, String)]
+}
+
 enum MovedItem {
     case quarantine(FoundItem, URL)
     case trash(FoundItem)

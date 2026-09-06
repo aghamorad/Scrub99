@@ -44,7 +44,7 @@ struct SettingsView: View {
             GroupBox("About") {
                 VStack(spacing: 8) {
                     Text("Scrub 99 — Find leftovers from apps you no longer use.")
-                    Text("Version 0.2.6")
+                    Text("Version 0.3.0")
                     Text("Built with Swift and SwiftUI.")
                 }
                 .font(RetroTypography.smallFont)

@@ -108,11 +108,30 @@ struct SafetyTests {
         try writeFixture("second", in: secondCache, fileManager: fileManager)
         let secondItem = item(path: secondCache, category: .cache, safety: .safeToReplace, association: .veryLikely)
         _ = try await engine.cleanup(items: [secondItem])
+        let quarantineEntries = engine.quarantineEntries()
+        guard let secondEntry = quarantineEntries.first(where: { $0.originalPath == secondCache.path }) else {
+            throw TestFailure.assertion("Quarantine management must expose the exact original and quarantine paths.")
+        }
+        try expect(secondEntry.quarantinePath.contains("Scrub99/Quarantine"), "Quarantine entries must expose their durable destination.")
+        try engine.restore(secondEntry)
+        try expect(fileManager.fileExists(atPath: secondCache.path), "An individual quarantine entry must be restorable.")
+
+        let permanentCache = home.appendingPathComponent("Library/Caches/com.example.permanent", isDirectory: true)
+        try writeFixture("permanent", in: permanentCache, fileManager: fileManager)
+        let permanentItem = item(path: permanentCache, category: .cache, safety: .safeToReplace, association: .confirmed)
+        _ = try await engine.cleanup(items: [permanentItem])
+        guard let permanentEntry = engine.quarantineEntries().first(where: { $0.originalPath == permanentCache.path }) else {
+            throw TestFailure.assertion("A quarantined item must be available for permanent deletion review.")
+        }
+        let permanentResult = try engine.permanentlyDelete([permanentEntry])
+        try expect(permanentResult.deleted.count == 1, "Permanent deletion must remove only the explicitly confirmed quarantine entry.")
+        try expect(!fileManager.fileExists(atPath: permanentEntry.quarantinePath), "Permanently deleted quarantine content must be absent.")
+
         let transactionCount = try fileManager.contentsOfDirectory(
             at: quarantine,
             includingPropertiesForKeys: nil
         ).count
-        try expect(transactionCount == 2, "Cleanup history must be append-only; a second cleanup cannot overwrite the first manifest.")
+        try expect(transactionCount == 3, "Cleanup history must be append-only; later cleanup actions cannot overwrite earlier manifests.")
 
         let claudeWorkspace = home.appendingPathComponent("Claude", isDirectory: true)
         let virastar = claudeWorkspace.appendingPathComponent("Virastar", isDirectory: true)
@@ -151,6 +170,19 @@ struct SafetyTests {
         try expect(inventory.foundItems.allSatisfy { $0.primaryApplication?.isInstalled == true }, "An executable in ~/.local/bin must count as an installed command-line application.")
         let mislabeledClaudeProject = item(path: virastar, category: .cache, safety: .safeToReplace, association: .confirmed)
         try expect(!policy.assess(mislabeledClaudeProject).isEligible, "A top-level Claude workspace must stay protected even if mislabeled as cache data.")
+
+        let npmCache = home.appendingPathComponent(".npm/_cacache", isDirectory: true)
+        try writeFixture("npm-cache", in: npmCache, fileManager: fileManager)
+        let desktopLock = home.appendingPathComponent("Desktop/~$ Book.docx")
+        try fileManager.createDirectory(at: desktopLock.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("word lock".utf8).write(to: desktopLock)
+        let housekeepingInventory = try await scanner.scan { _ in }
+        let housekeepingItems = housekeepingInventory.foundItems
+        try expect(housekeepingItems.contains { $0.path == npmCache && $0.category == .cache }, "The scan must identify known disposable npm cache paths.")
+        guard let wordLock = housekeepingItems.first(where: { $0.path == desktopLock }) else {
+            throw TestFailure.assertion("The scan must identify Desktop Word lock files for review.")
+        }
+        try expect(!policy.assess(wordLock).isEligible, "A Word lock file on Desktop must remain protected from automatic cleanup.")
 
         let explicitProject = home.appendingPathComponent("Documents/Explicit Project", isDirectory: true)
         try writeFixture("protected-project", in: explicitProject, fileManager: fileManager)
@@ -194,7 +226,7 @@ struct SafetyTests {
         try expect(ResultsSorter.groupNames(sortGroups, by: .size, ascending: false).first == "Large App", "Descending size sort must order application groups by aggregate measured size.")
         try expect(ResultsSorter.items(sortFixtures, by: .item, ascending: true).map(\.path.lastPathComponent) == ["Large", "Small", "Zulu"], "Item sort must use stable natural name ordering.")
 
-        print("Scrub99 safety, scanner, explanation, and sorting tests passed: 37 assertions")
+        print("Scrub99 safety, scanner, explanation, sorting, and quarantine tests passed: 40 assertions")
     }
 
     private static func item(

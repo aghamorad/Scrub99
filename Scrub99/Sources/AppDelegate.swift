@@ -14,6 +14,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         RuleEngine.shared.loadRules()
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let window = sender.windows.first(where: { !$0.isMiniaturized }) ?? sender.windows.first {
+            window.deminiaturize(nil)
+            window.makeKeyAndOrderFront(nil)
+        }
+        sender.activate(ignoringOtherApps: true)
+        return true
+    }
+
     private func setupAppearance() {
         // Ensure the app doesn't appear in the dock
         NSApp.setActivationPolicy(.regular)

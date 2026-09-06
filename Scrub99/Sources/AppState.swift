@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var lastErrorMessage: String?
     @Published var inspectedItemID: UUID?
     @Published var hasQuarantineItems = CleanupEngine().hasQuarantineItems
+    @Published var showQuarantineManagement = false
     @Published var showGuidedCleanup = false
     @Published var guidedCleanupItems: [FoundItem] = []
 
@@ -159,6 +160,32 @@ final class AppState: ObservableObject {
 
     func refreshQuarantineAvailability() {
         hasQuarantineItems = CleanupEngine().hasQuarantineItems
+    }
+
+    func quarantineEntries() -> [QuarantineEntry] {
+        CleanupEngine().quarantineEntries()
+    }
+
+    func restoreQuarantineEntry(_ entry: QuarantineEntry) {
+        do {
+            try CleanupEngine().restore(entry)
+            lastErrorMessage = nil
+            refreshQuarantineAvailability()
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    func permanentlyDeleteQuarantineEntries(_ entries: [QuarantineEntry]) {
+        do {
+            let result = try CleanupEngine().permanentlyDelete(entries)
+            lastErrorMessage = result.failed.isEmpty
+                ? nil
+                : result.failed.map { "\($0.0.originalPath): \($0.1)" }.joined(separator: "\n")
+            refreshQuarantineAvailability()
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
     }
 
     func undoLastQuarantine() async {

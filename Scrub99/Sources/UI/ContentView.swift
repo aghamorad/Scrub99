@@ -24,6 +24,10 @@ struct ContentView: View {
             GuidedCleanupView(items: appState.guidedCleanupItems)
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $appState.showQuarantineManagement) {
+            QuarantineView()
+                .environmentObject(appState)
+        }
         // Scrub99 deliberately draws a light Platinum-style surface. Allowing
         // inherited dark-mode labels produces white text on that light surface.
         .preferredColorScheme(.light)
@@ -47,7 +51,7 @@ struct WelcomeView: View {
                     .multilineTextAlignment(.center)
                     .padding(.bottom, 8)
                 RetroButton(label: "Scan My Mac", action: appState.startScan)
-                Text("Version 0.2.6")
+                Text("Version 0.3.0")
                     .font(RetroTypography.smallFont)
                     .foregroundColor(RetroColors.secondaryText)
                     .padding(.top, 24)
@@ -502,10 +506,10 @@ struct ActionBar: View {
             Text("Ticked: \(appState.activeCleanupItems.count) · \(appState.activeCleanupItems.reduce(0) { $0 + $1.size }.humanReadable)")
                 .font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
             if appState.hasQuarantineItems {
-                Button("Undo Last Quarantine") {
-                    Task { await appState.undoLastQuarantine() }
+                Button("Manage Quarantine") {
+                    appState.showQuarantineManagement = true
                 }
-                .buttonStyle(RetroButtonStyle())
+                .buttonStyle(RetroButtonStyle(isDefault: true))
             }
             Button("View Selected") {
                 let item = appState.activeCleanupItems.first ?? appState.scanResults?.foundItems.first

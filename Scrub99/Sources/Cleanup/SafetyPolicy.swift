@@ -143,9 +143,21 @@ struct CleanupSafetyPolicy {
             return false
         }
 
-        return relativeRoots.contains { relativePath in
+        if relativeRoots.contains(where: { relativePath in
             let root = homeDirectory.appendingPathComponent(relativePath, isDirectory: true).standardizedFileURL
             return source != root && isDescendant(source, of: root)
+        }) { return true }
+
+        guard category == .cache else { return false }
+        let exactCachePaths = [
+            ".npm/_cacache", ".npm/_npx", ".bun/install/cache",
+            ".cache/clang", ".cache/language_tool_python", ".cache/opencode",
+            ".cache/yt-dlp", ".matplotlib", ".idlerc", ".zcompdump",
+            ".wget-hsts", ".DS_Store"
+        ]
+        return exactCachePaths.contains { relativePath in
+            let root = homeDirectory.appendingPathComponent(relativePath).standardizedFileURL
+            return source == root || isDescendant(source, of: root)
         }
     }
 

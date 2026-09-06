@@ -193,7 +193,7 @@ The Mac OS 9 interface is a deliberate choice. Utilities such as Norton Utilitie
 
 ## Version
 
-**Scrub99 0.2.6:** Safety milestone with bounded scanning, protected workspace inventory, reversible quarantine, item explanations, full-row inspection, and sortable results
+**Scrub99 0.3.0:** Safety milestone with bounded scanning, protected workspace inventory, reversible quarantine, visible quarantine management, item explanations, full-row inspection, sortable results, and reliable Dock reopening
 
 Supported AI applications: Claude, ChatGPT, Goose, Ollama, HuggingFace, LM Studio
 
