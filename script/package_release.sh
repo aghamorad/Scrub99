@@ -3,8 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${1:-$ROOT_DIR/dist}"
-SWIFTC="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
-SDK="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+if [[ -d "${XCODE_APP:-/Applications/Xcode.app}" ]]; then
+  XCODE_APP="${XCODE_APP:-/Applications/Xcode.app}"
+elif [[ -d "/Applications/Xcode-beta.app" ]]; then
+  XCODE_APP="/Applications/Xcode-beta.app"
+else
+  echo "Scrub99 packaging requires Xcode.app or Xcode-beta.app in /Applications." >&2
+  exit 1
+fi
+SWIFTC="$XCODE_APP/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+SDK="$XCODE_APP/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 APP_NAME="Scrub99"
 APP_BUNDLE="$OUTPUT_DIR/$APP_NAME.app"
 ZIP_PATH="$OUTPUT_DIR/$APP_NAME-macOS-arm64.zip"
@@ -17,7 +25,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ ! -x "$SWIFTC" || ! -d "$SDK" ]]; then
-  echo "Scrub99 packaging requires Xcode at /Applications/Xcode.app." >&2
+  echo "Scrub99 packaging could not find a usable macOS SDK and Swift compiler in $XCODE_APP." >&2
   exit 1
 fi
 

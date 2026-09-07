@@ -115,8 +115,171 @@ final class Scanner {
         }
 
         targets.append(contentsOf: buildHousekeepingTargets(seenPaths: &seenPaths))
+        targets.append(contentsOf: buildPhantomApplicationTargets(seenPaths: &seenPaths))
 
         return targets
+    }
+
+    // MARK: - Phantom application audit
+
+    /// Enumerates the app-facing Library locations that commonly survive an
+    /// uninstall. This is deliberately shallow: it reports the app namespace
+    /// as one reviewable item and never guesses that its contents are junk.
+    private func buildPhantomApplicationTargets(seenPaths: inout Set<String>) -> [ScanTarget] {
+        let installed = installedApplicationEvidence()
+        let housekeeping = ApplicationRule(
+            name: "Phantom Application Audit",
+            knownPaths: [],
+            category: .system,
+            description: "Application residue whose apparent owner is not installed."
+        )
+        var targets: [ScanTarget] = []
+
+        let roots: [(String, ItemCategory, String)] = [
+            ("Library/Application Support", .applicationData, "Persistent application data found under Application Support."),
+            ("Library/HTTPStorages", .applicationData, "HTTP cookies and web storage left by an application. This may contain sign-in state and requires review."),
+            ("Library/Saved Application State", .applicationData, "Saved window and application state left by an application."),
+            ("Library/Preferences", .preferences, "Application preference left after the apparent owner was removed."),
+            ("Library/Caches", .cache, "Regenerable cache left by an application."),
+            ("Library/Logs", .logs, "Diagnostic logs left by an application."),
+            ("Library/Group Containers", .applicationData, "Sandbox group container left by an application."),
+            ("Library/LaunchAgents", .applicationData, "Per-user launch agent whose apparent owning application is not installed.")
+        ]
+
+        for (relativeRoot, category, description) in roots {
+            let root = homeDirectory.appendingPathComponent(relativeRoot, isDirectory: true)
+            guard let children = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey],
+                options: []
+            ) else { continue }
+
+            for child in children {
+                let normalized = child.standardizedFileURL
+                guard seenPaths.insert(normalized.path).inserted,
+                      shouldAuditAsPhantom(child, root: relativeRoot, installed: installed) else { continue }
+
+                let label = phantomApplicationName(for: child.lastPathComponent)
+                let app = ApplicationRef(
+                    name: label,
+                    bundleIdentifier: probableBundleIdentifier(for: child.lastPathComponent),
+                    isInstalled: false
+                )
+                targets.append(ScanTarget(
+                    url: normalized,
+                    knownPath: KnownPath(relativePath: relativeRoot, category: category, description: description),
+                    rule: housekeeping,
+                    app: app,
+                    association: .veryLikely,
+                    isInventoryChild: true
+                ))
+            }
+        }
+
+        return targets
+    }
+
+    private struct InstalledApplicationEvidence {
+        var names: Set<String> = []
+        var identifiers: Set<String> = []
+    }
+
+    private func installedApplicationEvidence() -> InstalledApplicationEvidence {
+        var evidence = InstalledApplicationEvidence()
+        let roots = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            URL(fileURLWithPath: "/System/Applications", isDirectory: true),
+            homeDirectory.appendingPathComponent("Applications", isDirectory: true)
+        ]
+
+        for root in roots {
+            guard let enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            for case let url as URL in enumerator {
+                guard url.pathExtension.lowercased() == "app" else { continue }
+                enumerator.skipDescendants()
+                guard let info = NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist")) as? [String: Any] else { continue }
+                if let name = info["CFBundleDisplayName"] as? String { evidence.names.insert(normalize(name)) }
+                if let name = info["CFBundleName"] as? String { evidence.names.insert(normalize(name)) }
+                evidence.names.insert(normalize(url.deletingPathExtension().lastPathComponent))
+                if let identifier = info["CFBundleIdentifier"] as? String { evidence.identifiers.insert(normalize(identifier)) }
+            }
+        }
+        return evidence
+    }
+
+    private func shouldAuditAsPhantom(
+        _ url: URL,
+        root: String,
+        installed: InstalledApplicationEvidence
+    ) -> Bool {
+        let rawName = url.lastPathComponent
+        let normalizedName = normalize(rawName.replacingOccurrences(of: ".plist", with: ""))
+        guard !rawName.isEmpty, rawName != ".DS_Store" else { return false }
+
+        // These are OS-owned or intentionally shared namespaces, even when
+        // they do not correspond to a visible third-party application.
+        let protectedPrefixes = [
+            "com.apple.", "com.openai.", "com.anthropic.", "com.google.",
+            "com.microsoft.", "com.adobe.", "com.dropbox.", "com.raycast.",
+            "com.macpaw.cleanmymac5", "com.logi.", "com.logitech.",
+            "com.malwarebytes.", "com.tdesktop.", "net.whatsapp.",
+            "org.mozilla.", "org.videolan.", "org.openemu.", "org.swift.",
+            "io.dictionaries.", "io.sentry.", "familycircled", "contactsd",
+            "identityservicesd", "privatecloudcomputed", "networkserviceproxy",
+            "software update utilities", "proapps", "cef", "crashreporter"
+        ]
+        if protectedPrefixes.contains(where: { normalizedName.hasPrefix(normalize($0)) }) { return false }
+
+        if let identifier = probableBundleIdentifier(for: rawName),
+           installed.identifiers.contains(normalize(identifier)) { return false }
+
+        // A generic support folder may be owned by an app whose bundle ID is
+        // not in the folder name. A normalized app-name match is sufficient
+        // to keep it out of the phantom list.
+        if installed.names.contains(normalizedName) { return false }
+        if installed.names.contains(where: { name in
+            name.count >= 4 && (normalizedName.contains(name) || name.contains(normalizedName))
+        }) { return false }
+
+        // Cache and log roots contain many harmless empty namespaces. They are
+        // still useful to show when they have actual content.
+        if ["Library/Caches", "Library/Logs"].contains(root) {
+            return directoryOrFileHasContent(url)
+        }
+        return true
+    }
+
+    private func directoryOrFileHasContent(_ url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]) else { return false }
+        if values.isDirectory != true { return true }
+        return (try? fileManager.contentsOfDirectory(atPath: url.path).isEmpty == false) ?? false
+    }
+
+    private func probableBundleIdentifier(for name: String) -> String? {
+        let withoutExtension = name.replacingOccurrences(of: ".plist", with: "")
+        let components = withoutExtension.split(separator: ".")
+        guard components.count >= 2,
+              components.allSatisfy({ !$0.isEmpty }),
+              components.first?.count ?? 0 >= 2 else { return nil }
+        return withoutExtension
+    }
+
+    private func phantomApplicationName(for name: String) -> String {
+        let trimmed = name.replacingOccurrences(of: ".plist", with: "")
+        if let identifier = probableBundleIdentifier(for: trimmed) {
+            return identifier.split(separator: ".").last.map(String.init) ?? trimmed
+        }
+        return trimmed
+    }
+
+    private func normalize(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: .current)
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
     }
 
     private func buildHousekeepingTargets(seenPaths: inout Set<String>) -> [ScanTarget] {
@@ -258,10 +421,12 @@ final class Scanner {
             reason: target.isInventoryChild
                 ? "Immediate child of an expanded inventory root in the \(target.rule.name) rule"
                 : "Exact path from the \(target.rule.name) rule",
-            explanation: target.isInventoryChild
-                ? "\(target.knownPath.description) Reported separately so its size and path can be reviewed."
-                : target.knownPath.description,
-            tags: isSymlink ? [.symlink] : [],
+            explanation: target.rule.name == "Phantom Application Audit"
+                ? "\(target.knownPath.description) No installed application matching this namespace was found in the current application inventory. Reported separately so its exact path, size, and contents can be reviewed before reversible quarantine."
+                : (target.isInventoryChild
+                    ? "\(target.knownPath.description) Reported separately so its size and path can be reviewed."
+                    : target.knownPath.description),
+            tags: isSymlink ? [.symlink] : (target.rule.name == "Phantom Application Audit" ? [.old, .unused] : []),
             isSelected: false
         )
     }

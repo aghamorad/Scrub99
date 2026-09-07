@@ -3,11 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/.build/typecheck"
-SWIFTC="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
-SDK="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+if [[ -d "${XCODE_APP:-/Applications/Xcode.app}" ]]; then
+  XCODE_APP="${XCODE_APP:-/Applications/Xcode.app}"
+elif [[ -d "/Applications/Xcode-beta.app" ]]; then
+  XCODE_APP="/Applications/Xcode-beta.app"
+else
+  echo "Scrub99 type-checking requires Xcode.app or Xcode-beta.app in /Applications." >&2
+  exit 1
+fi
+SWIFTC="$XCODE_APP/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+SDK="$XCODE_APP/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 
 if [[ ! -x "$SWIFTC" || ! -d "$SDK" ]]; then
-  echo "Scrub99 type-checking requires a full Xcode installation at /Applications/Xcode.app." >&2
+  echo "Scrub99 type-checking could not find a usable macOS SDK and Swift compiler in $XCODE_APP." >&2
   exit 1
 fi
 

@@ -160,14 +160,22 @@ struct SafetyTests {
             fileManager: fileManager,
             homeDirectory: home
         )
+        let phantomSupport = home.appendingPathComponent("Library/Application Support/Qrookie", isDirectory: true)
+        try writeFixture("orphaned app residue", in: phantomSupport, fileManager: fileManager)
         let inventory = try await scanner.scan { _ in }
         let inventoryPaths = Set(inventory.foundItems.map(\.path))
-        try expect(inventory.foundItems.count == 2, "An inventory-depth workspace must report each immediate child separately.")
-        try expect(inventoryPaths == Set([virastar, bedehMa]), "Workspace inventory must preserve the exact child paths.")
+        let workspaceItems = inventory.foundItems.filter { $0.path == virastar || $0.path == bedehMa }
+        try expect(workspaceItems.count == 2, "An inventory-depth workspace must report each immediate child separately.")
+        try expect(inventoryPaths.isSuperset(of: Set([virastar, bedehMa])), "Workspace inventory must preserve the exact child paths.")
         try expect(inventory.summary.totalSize > 0, "Workspace inventory must measure child content instead of reporting zero bytes.")
-        try expect(inventory.foundItems.allSatisfy { $0.category == .projectData && $0.safetyLevel == .userDataType }, "Workspace children must remain classified as protected user data.")
-        try expect(inventory.foundItems.allSatisfy { !policy.assess($0).isEligible }, "Protected workspace children must never become cleanup targets.")
-        try expect(inventory.foundItems.allSatisfy { $0.primaryApplication?.isInstalled == true }, "An executable in ~/.local/bin must count as an installed command-line application.")
+        try expect(workspaceItems.allSatisfy { $0.category == .projectData && $0.safetyLevel == .userDataType }, "Workspace children must remain classified as protected user data.")
+        try expect(workspaceItems.allSatisfy { !policy.assess($0).isEligible }, "Protected workspace children must never become cleanup targets.")
+        try expect(workspaceItems.allSatisfy { $0.primaryApplication?.isInstalled == true }, "An executable in ~/.local/bin must count as an installed command-line application.")
+        try expect(inventoryPaths.contains(phantomSupport), "The scanner must identify residue for an application namespace with no installed app.")
+        if let phantom = inventory.foundItems.first(where: { $0.path == phantomSupport }) {
+            try expect(phantom.primaryApplication?.isInstalled == false, "Phantom application residue must be marked as uninstalled.")
+            try expect(phantom.tags.contains(.old) && phantom.tags.contains(.unused), "Phantom application residue must be visibly labeled for review.")
+        }
         let mislabeledClaudeProject = item(path: virastar, category: .cache, safety: .safeToReplace, association: .confirmed)
         try expect(!policy.assess(mislabeledClaudeProject).isEligible, "A top-level Claude workspace must stay protected even if mislabeled as cache data.")
 

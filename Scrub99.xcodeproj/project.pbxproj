@@ -138,7 +138,7 @@
 /* Begin PBXNativeTarget section */
 		A8000001 /* Scrub99 */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A9000001;
+			buildConfigurationList = A9000010;
 			buildPhases = (
 				A6000002,
 				A6000001,
@@ -163,7 +163,7 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 			};
-			buildConfigurationList = A9000002;
+			buildConfigurationList = A9000011;
 			compatibilityVersion = "Xcode 14.0";
 			mainGroup = A7000001;
 			productRefGroup = A7000003;
@@ -309,20 +309,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A9000001 /* Build configuration list for PBXNativeTarget "Scrub99" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A9000001,
-				A9000002,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A9000002 /* Build configuration list for PBXProject "Scrub99" */ = {
+		A9000010 /* Build configuration list for PBXNativeTarget "Scrub99" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A9000003,
 				A9000004,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A9000011 /* Build configuration list for PBXProject "Scrub99" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A9000001,
+				A9000002,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

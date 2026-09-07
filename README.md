@@ -8,7 +8,7 @@ I also did not want to make one of those cleaners that announces that it has fou
 
 The interface looks like an old Mac utility because I miss the peculiar honesty of those applications: they showed you files, paths, sizes, and consequences. They did not pretend the computer possessed mystical knowledge. The retro icon is original too, with a platinum storage drawer, blue inspection lens, broom, and caution badge.
 
-[Download Scrub99 0.2.6](https://github.com/aghamorad/Scrub99/releases/tag/v0.2.6)
+[Download Scrub99 0.3.0](https://github.com/aghamorad/Scrub99/releases/tag/v0.3.0)
 
 ## What you actually do with it
 
@@ -21,7 +21,7 @@ The interface looks like an old Mac utility because I miss the peculiar honesty 
 
 ## What this version can and cannot claim
 
-Scrub99 0.2.6 is an early safety milestone. It performs a local, rule-backed audit of known application locations; it does not claim to understand every file on your Mac, and it does not infer that two large model files are duplicates merely because their names look similar. Some folders may also be inaccessible because of macOS permissions.
+Scrub99 0.3.0 is an early safety milestone. It performs a local, rule-backed audit of known application locations and now reports likely remnants of applications that are no longer installed. It does not claim to understand every file on your Mac, and it does not infer that two large model files are duplicates merely because their names look similar. Some folders may also be inaccessible because of macOS permissions.
 
 There is no connected AI model in this release. That part comes later, if it can be added without handing an LLM the authority to quietly expand what counts as safe or move files by itself. The scanner, path-safety rules, quarantine records, explanations, and restore tests came first because, honestly, a cleanup app has to earn trust at the boring filesystem level before its “AI” opinions mean very much.
 
@@ -46,6 +46,8 @@ Dragging an application to the Trash usually removes its `.app` bundle. It does 
 - Audits exact `~/Library` and dot-directory roots declared in the bundled rule database
 - Measures each matched root once, without recursively walking the entire home directory
 - Detects installed vs. uninstalled applications
+- Audits likely phantom application residue in Application Support, Preferences, HTTP storage, saved state, group containers, caches, logs, and user LaunchAgents
+- Excludes Apple-owned and known shared namespaces from the phantom-app report
 - Identifies shared resources (HuggingFace cache, pip cache, uv cache)
 - Reports the measured size of known model and cache roots without inferring duplicate files from names
 
