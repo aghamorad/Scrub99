@@ -1,60 +1,68 @@
-// Scrub99 — SettingsView
-// App preferences and configuration
+// Scrub99 - SettingsView
 
 import SwiftUI
 
 struct SettingsView: View {
+    @EnvironmentObject private var appState: AppState
     @AppStorage("showExplanations") private var showExplanations = "Standard"
     @AppStorage("quarantineRetentionDays") private var quarantineRetentionDays = 7
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Scrub 99 Preferences")
-                .font(.title2)
-                .bold()
+        Form {
+            Section("Appearance") {
+                Picker("Theme", selection: Binding(
+                    get: { appState.currentTheme },
+                    set: { appState.setTheme($0) }
+                )) {
+                    ForEach(AppState.Theme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+                .pickerStyle(.segmented)
 
-            Divider()
-                .background(RetroColors.insetBorder)
+                Text(themeDescription)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            GroupBox("Explanations") {
+            Section("Explanations") {
                 Picker("Detail level", selection: $showExplanations) {
                     Text("Brief").tag("Brief")
                     Text("Standard").tag("Standard")
                     Text("Detailed").tag("Detailed")
                 }
                 .pickerStyle(.radioGroup)
-                .padding()
             }
 
-            GroupBox("Cleanup Behavior") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Direct Trash deletion is disabled. Cleanup always uses reversible Scrub99 Quarantine.")
-                        .font(RetroTypography.smallFont)
+            Section("Cleanup") {
+                Text("Cleanup always uses reversible Scrub99 Quarantine. Direct Trash deletion remains disabled.")
+                    .font(.callout)
 
-                    TextField("Quarantine retention (days)", value: $quarantineRetentionDays, format: .number)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .frame(width: 200)
-                }
-                .padding()
+                Stepper(
+                    "Quarantine retention: \(quarantineRetentionDays) day\(quarantineRetentionDays == 1 ? "" : "s")",
+                    value: $quarantineRetentionDays,
+                    in: 1...90
+                )
             }
 
-            Divider()
-                .background(RetroColors.insetBorder)
-
-            GroupBox("About") {
-                VStack(spacing: 8) {
-                    Text("Scrub 99 — Find leftovers from apps you no longer use.")
-                    Text("Version 0.3.0")
-                    Text("Built with Swift and SwiftUI.")
-                }
-                .font(RetroTypography.smallFont)
-                .foregroundColor(RetroColors.darkText)
-                .multilineTextAlignment(.center)
-                .padding()
+            Section("About") {
+                LabeledContent("App", value: "Scrub 99")
+                LabeledContent("Version", value: "0.3.0")
+                LabeledContent("Purpose", value: "Find and safely review application leftovers.")
             }
         }
+        .formStyle(.grouped)
         .padding(20)
-        .frame(width: 460, height: 360)
-        .preferredColorScheme(.light)
+        .frame(width: 520, height: 430)
+    }
+
+    private var themeDescription: String {
+        switch appState.currentTheme {
+        case .classic9:
+            return "Mac OS 9 / Platinum keeps Scrub99's original retro interface, typography, controls, and light appearance."
+        case .liquidGlass:
+            return "Liquid Glass uses native macOS navigation, materials, controls, and real Liquid Glass surfaces on macOS 26 and later."
+        }
     }
 }

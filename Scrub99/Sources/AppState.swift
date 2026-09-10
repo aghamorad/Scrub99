@@ -12,7 +12,7 @@ final class AppState: ObservableObject {
     @Published var selectedCategory: Category?
     @Published var showCleanupConfirmation = false
     @Published var cleanupHistory: [CleanupRecord] = []
-    @Published var currentTheme: Theme = .classic9
+    @Published var currentTheme: Theme
     @Published var lastErrorMessage: String?
     @Published var inspectedItemID: UUID?
     @Published var hasQuarantineItems = CleanupEngine().hasQuarantineItems
@@ -23,6 +23,17 @@ final class AppState: ObservableObject {
     private let cleanupSafetyPolicy = CleanupSafetyPolicy()
     private var scanTask: Task<Void, Never>?
     private var scanWorkerTask: Task<ScanResults, Error>?
+
+    init() {
+        let storedTheme = UserDefaults.standard.string(forKey: "scrub99.theme")
+        currentTheme = Theme(rawValue: storedTheme ?? "") ?? .classic9
+    }
+
+    func setTheme(_ theme: Theme) {
+        guard currentTheme != theme else { return }
+        currentTheme = theme
+        UserDefaults.standard.set(theme.rawValue, forKey: "scrub99.theme")
+    }
 
     enum ScanState: String, Codable {
         case idle, scanning, complete, error
@@ -77,7 +88,7 @@ final class AppState: ObservableObject {
         }
         let applications = RuleEngine.shared.applications
 
-        let worker = Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) { [weak self] in
             let scanner = Scanner(applications: applications)
             return try await scanner.scan { [weak self] progress in
                 Task { @MainActor [weak self] in
@@ -201,10 +212,24 @@ final class AppState: ObservableObject {
 }
 
 extension AppState {
-    enum Theme: String, CaseIterable {
-        case classic9 = "Mac OS 9", modern = "System"
+    enum Theme: String, CaseIterable, Identifiable {
+        case classic9 = "Mac OS 9"
+        case liquidGlass = "Liquid Glass"
+
+        var id: String { rawValue }
+
         var displayName: String {
-            switch self { case .classic9: return "Classic 9"; case .modern: return "System" }
+            switch self {
+            case .classic9: return "Mac OS 9 / Platinum"
+            case .liquidGlass: return "Liquid Glass"
+            }
+        }
+
+        var shortName: String {
+            switch self {
+            case .classic9: return "Classic 9"
+            case .liquidGlass: return "Glass"
+            }
         }
     }
 }

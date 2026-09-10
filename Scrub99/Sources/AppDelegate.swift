@@ -27,8 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Ensure the app doesn't appear in the dock
         NSApp.setActivationPolicy(.regular)
 
-        // Set up menu
-        setupMenu()
+        // Let SwiftUI/macOS own the standard application menu.
+        // Scrub99 adds its actions through Scene commands instead of replacing
+        // Settings, Window, Help, keyboard navigation, and other native menus.
     }
 
     private func setupMenu() {

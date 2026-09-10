@@ -8,6 +8,21 @@ struct ContentView: View {
 
     var body: some View {
         Group {
+            switch appState.currentTheme {
+            case .classic9:
+                ClassicContentView()
+            case .liquidGlass:
+                GlassContentView()
+            }
+        }
+    }
+}
+
+struct ClassicContentView: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        Group {
             switch appState.scanState {
             case .idle: WelcomeView()
             case .scanning: ScanningView()
@@ -503,36 +518,56 @@ struct ResultDetailsPane: View {
 
 struct ActionBar: View {
     @EnvironmentObject private var appState: AppState
+    @State private var feedbackMessage = ""
+    @State private var showFeedback = false
 
     var body: some View {
         HStack(spacing: 12) {
             Button("Clean Up Unnecessary Stuff…") {
-                appState.beginGuidedCleanup()
+                if appState.recommendedCleanupItems.isEmpty {
+                    showMessage("No low-risk cache or log candidates are currently available for guided cleanup.")
+                } else {
+                    appState.beginGuidedCleanup()
+                }
             }
             .buttonStyle(RetroButtonStyle())
-            .disabled(appState.recommendedCleanupItems.isEmpty)
             .help(guidedCleanupHelp)
             Spacer()
             Text("Ticked: \(appState.activeCleanupItems.count) · \(appState.activeCleanupItems.reduce(0) { $0 + $1.size }.humanReadable)")
                 .font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            if appState.hasQuarantineItems {
-                Button("Manage Quarantine") {
+            Button("Manage Quarantine") {
+                if appState.hasQuarantineItems {
                     appState.showQuarantineManagement = true
+                } else {
+                    showMessage("Scrub99 Quarantine is currently empty.")
                 }
-                .buttonStyle(RetroButtonStyle(isDefault: true))
             }
+            .buttonStyle(RetroButtonStyle(isDefault: true))
             Button("View Selected") {
                 let item = appState.activeCleanupItems.first ?? appState.scanResults?.foundItems.first
                 if let item { appState.inspectItem(item.id) }
             }
             .buttonStyle(RetroButtonStyle())
             Button("Review Quarantine") {
-                appState.showCleanupConfirmation = true
+                if appState.activeCleanupItems.isEmpty {
+                    showMessage("Tick at least one reviewable item before opening the quarantine review.")
+                } else {
+                    appState.showCleanupConfirmation = true
+                }
             }
             .buttonStyle(RetroButtonStyle(isDefault: true))
             .keyboardShortcut(.return)
-            .disabled(appState.activeCleanupItems.isEmpty)
         }
+        .alert("Scrub 99", isPresented: $showFeedback) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(feedbackMessage)
+        }
+    }
+
+    private func showMessage(_ message: String) {
+        feedbackMessage = message
+        showFeedback = true
     }
 
     private var guidedCleanupHelp: String {
@@ -587,5 +622,566 @@ struct ErrorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)
+    }
+}
+
+
+// MARK: - Liquid Glass Theme
+
+struct GlassContentView: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        Group {
+            switch appState.scanState {
+            case .idle:
+                GlassWelcomeView()
+            case .scanning:
+                GlassScanningView()
+            case .complete:
+                GlassResultsView()
+            case .error:
+                GlassErrorView()
+            }
+        }
+        .sheet(isPresented: $appState.showCleanupConfirmation) {
+            CleanupView()
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $appState.showGuidedCleanup) {
+            GuidedCleanupView(items: appState.guidedCleanupItems)
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $appState.showQuarantineManagement) {
+            QuarantineView()
+                .environmentObject(appState)
+        }
+        .frame(minWidth: 980, minHeight: 640)
+        .background(GlassBackdrop())
+    }
+}
+
+private struct GlassBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            RadialGradient(
+                colors: [
+                    Color.accentColor.opacity(0.13),
+                    Color.clear
+                ],
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 780
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct GlassWelcomeView: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var message = ""
+    @State private var showMessage = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(spacing: 10) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 46, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+
+                Text("Scrub 99")
+                    .font(.system(size: 34, weight: .semibold))
+
+                Text("Find AI leftovers, ordinary app leftovers, caches, models, and protected project data without mixing them together.")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 620)
+            }
+
+            VStack(spacing: 12) {
+                Button {
+                    appState.startScan()
+                } label: {
+                    Label("Scan My Mac", systemImage: "magnifyingglass")
+                        .frame(minWidth: 180)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.return, modifiers: [])
+
+                Button {
+                    if appState.hasQuarantineItems {
+                        appState.showQuarantineManagement = true
+                    } else {
+                        message = "Scrub99 Quarantine is currently empty."
+                        showMessage = true
+                    }
+                } label: {
+                    Label("Manage Quarantine", systemImage: "archivebox")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            GlassThemeChooser()
+
+            Spacer()
+
+            Text("Nothing is deleted automatically. Scrub99 inventories first, explains what it found, and uses reversible quarantine.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 600)
+        }
+        .padding(40)
+        .scrubGlassPanel()
+        .padding(34)
+        .alert("Scrub 99", isPresented: $showMessage) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+    }
+}
+
+private struct GlassScanningView: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ProgressView()
+                .controlSize(.large)
+
+            Text(appState.scanProgress.title)
+                .font(.title3.weight(.medium))
+                .multilineTextAlignment(.center)
+
+            ProgressView(value: Double(appState.scanProgress.progressValue), total: 1)
+                .frame(maxWidth: 420)
+
+            Button("Cancel Scan") {
+                appState.cancelScan()
+            }
+            .buttonStyle(.bordered)
+            .keyboardShortcut(".", modifiers: .command)
+        }
+        .padding(36)
+        .frame(maxWidth: 560)
+        .scrubGlassPanel()
+        .padding()
+    }
+}
+
+private struct GlassResultsView: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var searchText = ""
+
+    private var filteredItems: [FoundItem] {
+        let items = appState.scanResults?.foundItems ?? []
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return items }
+
+        return items.filter { item in
+            item.path.path.localizedCaseInsensitiveContains(query) ||
+            item.category.displayName.localizedCaseInsensitiveContains(query) ||
+            item.findingKind.rawValue.localizedCaseInsensitiveContains(query) ||
+            (item.primaryApplication?.name.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            GlassSidebar(items: filteredItems)
+                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 430)
+        } detail: {
+            VStack(spacing: 0) {
+                if let item = appState.inspectedItem {
+                    GlassResultDetails(item: item)
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 36))
+                        Text("Choose a Finding")
+                            .font(.title2.weight(.semibold))
+                        Text("Select an item on the left to see exactly what it is, why Scrub99 found it, and whether it can be quarantined.")
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 440)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                Divider()
+                GlassActionBar()
+                    .padding(14)
+            }
+        }
+        .searchable(text: $searchText, prompt: "Search apps, paths, finding types, or categories")
+    }
+}
+
+private struct GlassSidebar: View {
+    let items: [FoundItem]
+
+    var body: some View {
+        List {
+            ForEach(FindingKind.allCases, id: \.self) { kind in
+                let group = items
+                    .filter { $0.findingKind == kind }
+                    .sorted { $0.size > $1.size }
+
+                if !group.isEmpty {
+                    Section {
+                        ForEach(group) { item in
+                            GlassFindingRow(item: item)
+                        }
+                    } header: {
+                        HStack {
+                            Text(kind.rawValue)
+                            Spacer()
+                            Text(group.reduce(0) { $0 + $1.size }.humanReadable)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+}
+
+private struct GlassFindingRow: View {
+    let item: FoundItem
+    @EnvironmentObject private var appState: AppState
+
+    private var assessment: CleanupSafetyPolicy.Assessment {
+        appState.cleanupAssessment(for: item)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                appState.inspectItem(item.id)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: iconName)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.path.lastPathComponent)
+                            .lineLimit(1)
+
+                        HStack(spacing: 6) {
+                            Text(item.category.displayName)
+                            Text("·")
+                            Text(item.size.humanReadable)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if assessment.canBeSelected || item.isSelected {
+                Button {
+                    appState.toggleSelection(for: item.id)
+                } label: {
+                    Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .help(item.isSelected ? "Remove from quarantine review" : "Add to quarantine review")
+            }
+        }
+        .padding(.vertical, 4)
+        .background(
+            appState.inspectedItemID == item.id
+                ? Color.accentColor.opacity(0.11)
+                : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+    }
+
+    private var iconName: String {
+        switch item.findingKind {
+        case .aiAppData: return "sparkles"
+        case .aiLeftover: return "sparkles.rectangle.stack"
+        case .applicationLeftover: return "shippingbox"
+        case .housekeeping: return "wrench.and.screwdriver"
+        case .userProject: return "folder"
+        case .other: return "questionmark.folder"
+        }
+    }
+}
+
+private struct GlassResultDetails: View {
+    let item: FoundItem
+    @EnvironmentObject private var appState: AppState
+    @State private var message = ""
+    @State private var showMessage = false
+
+    private var assessment: CleanupSafetyPolicy.Assessment {
+        appState.cleanupAssessment(for: item)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: detailIcon)
+                        .font(.system(size: 28, weight: .medium))
+                        .frame(width: 42, height: 42)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.path.lastPathComponent)
+                            .font(.title2.weight(.semibold))
+                        Text(item.findingKind.rawValue)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Text(item.size.humanReadable)
+                        .font(.title3.monospacedDigit())
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    GlassDetailLine(label: "Application", value: item.primaryApplication?.name ?? "Unknown")
+                    GlassDetailLine(label: "Storage category", value: item.category.displayName)
+                    GlassDetailLine(label: "Ownership confidence", value: item.association.rawValue)
+                    GlassDetailLine(label: "Safety", value: item.safetyLevel.rawValue)
+                    GlassDetailLine(label: "Full path", value: item.path.path)
+                }
+                .padding(18)
+                .scrubGlassPanel()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What Scrub99 thinks")
+                        .font(.headline)
+
+                    Text(item.findingKind.explanation)
+                        .foregroundStyle(.secondary)
+
+                    let guide = item.readerGuide
+                    GlassDetailLine(label: "What this is", value: guide.whatItIs)
+                    GlassDetailLine(label: "Why it exists", value: guide.whyItExists)
+                    GlassDetailLine(label: "Is it necessary?", value: guide.necessity)
+                    GlassDetailLine(label: "Risk if quarantined", value: "\(guide.risk.rawValue). \(guide.riskExplanation)")
+                }
+                .padding(18)
+                .scrubGlassPanel()
+
+                HStack(spacing: 10) {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([item.path])
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        if assessment.canBeSelected || item.isSelected {
+                            appState.toggleSelection(for: item.id)
+                        } else {
+                            message = assessment.reason
+                            showMessage = true
+                        }
+                    } label: {
+                        Label(
+                            item.isSelected ? "Remove from Review" : "Add to Quarantine Review",
+                            systemImage: item.isSelected ? "minus.circle" : "plus.circle"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 780, alignment: .leading)
+        }
+        .alert("Scrub 99", isPresented: $showMessage) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+    }
+
+    private var detailIcon: String {
+        switch item.findingKind {
+        case .aiAppData: return "sparkles"
+        case .aiLeftover: return "sparkles.rectangle.stack"
+        case .applicationLeftover: return "shippingbox"
+        case .housekeeping: return "wrench.and.screwdriver"
+        case .userProject: return "folder"
+        case .other: return "questionmark.folder"
+        }
+    }
+}
+
+private struct GlassDetailLine: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct GlassActionBar: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var message = ""
+    @State private var showMessage = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                appState.startScan()
+            } label: {
+                Label("Scan Again", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                if appState.recommendedCleanupItems.isEmpty {
+                    tell("No low-risk cache or log candidates are currently available for guided cleanup.")
+                } else {
+                    appState.beginGuidedCleanup()
+                }
+            } label: {
+                Label("Guided Cleanup", systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                if appState.hasQuarantineItems {
+                    appState.showQuarantineManagement = true
+                } else {
+                    tell("Scrub99 Quarantine is currently empty.")
+                }
+            } label: {
+                Label("Quarantine", systemImage: "archivebox")
+            }
+            .buttonStyle(.bordered)
+
+            Spacer()
+
+            Text("\(appState.activeCleanupItems.count) selected · \(appState.totalReclaimable.humanReadable)")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                if appState.activeCleanupItems.isEmpty {
+                    tell("Select at least one reviewable item first. Scrub99 will never infer destructive intent from merely inspecting a row.")
+                } else {
+                    appState.showCleanupConfirmation = true
+                }
+            } label: {
+                Label("Review Selected", systemImage: "checklist")
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+        .alert("Scrub 99", isPresented: $showMessage) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+    }
+
+    private func tell(_ text: String) {
+        message = text
+        showMessage = true
+    }
+}
+
+private struct GlassThemeChooser: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        Picker("Appearance", selection: Binding(
+            get: { appState.currentTheme },
+            set: { appState.setTheme($0) }
+        )) {
+            ForEach(AppState.Theme.allCases) { theme in
+                Text(theme.shortName).tag(theme)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 260)
+    }
+}
+
+private struct GlassErrorView: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 38))
+
+            Text("Scan Failed")
+                .font(.title2.weight(.semibold))
+
+            Text(appState.lastErrorMessage ?? "Scrub99 could not complete the scan.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 480)
+
+            HStack {
+                Button("Back") {
+                    appState.scanState = .idle
+                    appState.scanResults = nil
+                }
+                .buttonStyle(.bordered)
+
+                Button("Try Again") {
+                    appState.startScan()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(34)
+        .scrubGlassPanel()
+        .padding()
+    }
+}
+
+private struct ScrubGlassPanelModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(
+                    .regular,
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+        } else {
+            content
+                .background(
+                    .ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+        }
+    }
+}
+
+private extension View {
+    func scrubGlassPanel() -> some View {
+        modifier(ScrubGlassPanelModifier())
     }
 }
