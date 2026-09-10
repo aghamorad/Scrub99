@@ -1,8 +1,75 @@
 // Scrub99 — Classifier
-// Classifies found items by category, safety level, and confidence
+// Classifies found items by category, safety level, confidence, and finding origin
 
 import Foundation
+
+/// Why Scrub99 surfaced a path. This is deliberately separate from ItemCategory:
+/// a Claude cache is both "AI app data" and a "Cache", while an orphaned ordinary
+/// Application Support folder is an "App Leftover" and "Application Data".
+enum FindingKind: String, CaseIterable {
+    case aiAppData = "AI App Data"
+    case aiLeftover = "AI Leftover"
+    case applicationLeftover = "App Leftover"
+    case housekeeping = "System / Developer Housekeeping"
+    case userProject = "User / Project Data"
+    case other = "Other"
+
+    var explanation: String {
+        switch self {
+        case .aiAppData:
+            return "This path belongs to a known AI application or AI tool that Scrub99 currently detects as installed or active."
+        case .aiLeftover:
+            return "This path matches a known AI application rule, but Scrub99 does not currently detect that application as installed."
+        case .applicationLeftover:
+            return "This path was found in an app-facing Library location, but Scrub99 could not find an installed application that appears to own the namespace."
+        case .housekeeping:
+            return "This is a known operating-system, shell, package-manager, or developer-tool housekeeping path."
+        case .userProject:
+            return "This is user-created project or workspace data. It is shown for awareness and must not be treated as disposable application residue."
+        case .other:
+            return "This finding does not fit Scrub99's AI, application-leftover, housekeeping, or user-project origin groups."
+        }
+    }
+}
+
+extension FoundItem {
+    /// Separates why Scrub99 found an item from what kind of data it contains.
+    var findingKind: FindingKind {
+        Classifier.findingKind(for: self, rules: RuleEngine.shared.applications)
+    }
+}
+
 class Classifier {
+
+    /// Pure origin classifier used by the UI and tests. Passing rules explicitly keeps
+    /// AI-vs-non-AI detection rule-backed instead of hard-coding vendor names.
+    static func findingKind(for item: FoundItem, rules: [ApplicationRule]) -> FindingKind {
+        if item.category == .projectData {
+            return .userProject
+        }
+
+        if item.primaryApplication?.name == "macOS Housekeeping" {
+            return .housekeeping
+        }
+
+        if item.reason?.localizedCaseInsensitiveContains("Phantom Application Audit") == true {
+            return .applicationLeftover
+        }
+
+        if let application = item.primaryApplication,
+           let rule = rules.first(where: {
+               $0.name.caseInsensitiveCompare(application.name) == .orderedSame
+           }),
+           rule.category == .ai {
+            return application.isInstalled ? .aiAppData : .aiLeftover
+        }
+
+        if item.primaryApplication?.isInstalled == false {
+            return .applicationLeftover
+        }
+
+        return .other
+    }
 
     /// Classify a list of items and return classified results.
     func classify(items: [FoundItem]) -> [FoundItem] {
@@ -13,25 +80,20 @@ class Classifier {
     private func classify(_ item: FoundItem) -> FoundItem {
         var item = item
 
-        // Determine category
         if item.category == .unknown {
             item.category = classifyCategory(item)
         }
 
-        // Determine safety level
         if item.safetyLevel == .unknown {
             item.safetyLevel = classifySafety(item)
         }
 
-        // Determine association
         if item.association == .unknown {
             item.association = classifyAssociation(item)
         }
 
-        // Assign tags
         item.tags = Array(Set(item.tags + classifyTags(item)))
 
-        // Auto-select based on safety
         // Discovery and recommendation are separate from user authorization.
         // Every scan begins with an empty cleanup selection.
         item.isSelected = false
@@ -39,74 +101,80 @@ class Classifier {
         return item
     }
 
-    /// Determine the item's category based on path analysis.
+    /// Determine the item's storage/content category. Root semantics are stronger
+    /// evidence than loose product-name keywords.
     private func classifyCategory(_ item: FoundItem) -> ItemCategory {
         let path = item.path.path.lowercased()
         let filename = item.path.lastPathComponent.lowercased()
+        let components = item.path.pathComponents.map { $0.lowercased() }
 
-        // Check by path segments first (most reliable)
-        if path.contains("/Library/Caches/") || path.contains("/.cache/") {
-            // But model caches are models, not regular caches
-            if path.contains("huggingface") || path.contains("ollama") {
+        if path.contains("/library/caches/") || path.contains("/.cache/") {
+            if hasStrongModelEvidence(path: path, filename: filename, components: components) {
                 return .downloadedModels
             }
-            if path.contains("pip") || path.contains("uv") {
+            if path.contains("/.cache/pip") || path.contains("/.cache/uv") {
                 return .shared
             }
             return .cache
         }
 
-        if path.contains("/Library/Logs/") {
+        if path.contains("/library/logs/") {
             return .logs
         }
 
-        if filename.hasSuffix(".plist") {
+        if path.contains("/library/preferences/") || filename.hasSuffix(".plist") {
             return .preferences
         }
 
-        // Check for model files
+        // Explicit model files remain models regardless of where they live.
         if isModelFile(filename) {
             return .downloadedModels
         }
 
-        // Check path for model-related keywords
-        let modelKeywords = ["model", "checkpoint", "weights", "gguf", "safetensors",
-                           "model-store", "models"]
-        if modelKeywords.contains(where: { path.contains($0) }) {
+        // Application Support and related app-facing Library roots are persistent
+        // application state. Do not call a whole support folder a model merely because
+        // a product/folder name happens to contain the word "model".
+        if path.contains("/library/application support/") ||
+           path.contains("/library/containers/") ||
+           path.contains("/library/group containers/") ||
+           path.contains("/library/saved application state/") ||
+           path.contains("/library/httpstorages/") {
+            return .applicationData
+        }
+
+        if hasStrongModelEvidence(path: path, filename: filename, components: components) {
             return .downloadedModels
         }
 
-        // Python environments
-        if path.contains(".venv") || path.contains("site-packages") ||
-           path.contains("virtualenv") || path.contains("pyenv") {
+        if components.contains(".venv") || components.contains("venv") ||
+           path.contains("site-packages") || path.contains("virtualenv") ||
+           path.contains("pyenv") {
             return .pythonEnvironment
         }
 
-        // Shared resources
         if path.contains("huggingface") || path.contains("hf-") ||
            path.contains("transformers") || path.contains("datasets") {
             return .shared
         }
 
-        // Conversation data
-        if path.contains("conversation") || path.contains("chat") ||
-           path.contains("messages") {
+        // Avoid the old broad `chat` substring check. Product names containing "chat"
+        // are not evidence that an entire directory is conversation history.
+        let conversationNames: Set<String> = ["conversation", "conversations", "messages", "history"]
+        if components.contains(where: { conversationNames.contains($0) }) {
             return .conversationData
         }
 
-        // Credentials
         if path.contains("credential") || path.contains("api.key") ||
-           path.contains(".env") || path.contains("token") {
+           components.contains(".env") || path.contains("secret") ||
+           path.contains("token") {
             return .credentials
         }
 
-        // User data (documents, projects, etc.)
-        let userPaths = ["documents", "desktop", "projects", "code", "work"]
-        if userPaths.contains(where: { path.contains($0) }) {
+        let userComponents: Set<String> = ["documents", "desktop", "projects", "project", "code", "work"]
+        if components.contains(where: { userComponents.contains($0) }) {
             return .projectData
         }
 
-        // Default for large items
         if item.size > 10_000_000 {
             return .applicationData
         }
@@ -114,92 +182,104 @@ class Classifier {
         return .unknown
     }
 
-    /// Check if a filename matches known model file patterns.
-    private func isModelFile(_ filename: String) -> Bool {
-        let modelExtensions = ["gguf", "safetensors", "pt", "pth", "onnx",
-                             "bin", "model", "ckpt"]
-        return modelExtensions.contains { filename.hasSuffix(".\($0)") }
-            || filename.contains("model")
+    /// Strong model evidence uses exact extensions/path components rather than a
+    /// generic `contains("model")` substring.
+    private func hasStrongModelEvidence(path: String, filename: String, components: [String]) -> Bool {
+        if isModelFile(filename) { return true }
+
+        let modelDirectories: Set<String> = [
+            "models", "checkpoints", "weights", "model-store", "model_store"
+        ]
+        if components.contains(where: { modelDirectories.contains($0) }) {
+            return true
+        }
+
+        return path.contains("/.ollama/models/") ||
+            path.contains("/huggingface/hub/") ||
+            path.contains("/huggingface/models/")
     }
 
-    /// Classify safety level.
+    /// Check if a filename matches known model file patterns.
+    private func isModelFile(_ filename: String) -> Bool {
+        let strongExtensions = ["gguf", "safetensors", "pt", "pth", "onnx", "model", "ckpt"]
+        if strongExtensions.contains(where: { filename.hasSuffix(".\($0)") }) {
+            return true
+        }
+
+        // `.bin` is too generic on its own. Count it only for common model-weight names.
+        if filename.hasSuffix(".bin") {
+            return filename.contains("pytorch_model") ||
+                filename.contains("model-") ||
+                filename.contains("weights")
+        }
+
+        return false
+    }
+
     private func classifySafety(_ item: FoundItem) -> SafetyLevel {
         let path = item.path.path.lowercased()
 
-        // Never auto-select user data
-        if path.contains("/Documents/") || path.contains("/Desktop/") {
+        // These comparisons must use lowercase because `path` was lowercased above.
+        if path.contains("/documents/") || path.contains("/desktop/") {
             return .userDataType
         }
 
-        // Credentials are always sensitive
         if path.contains("credential") || path.contains("api.key") ||
            path.contains(".env") || path.contains("secret") {
             return .doNotAutoSelect
         }
 
-        // Conversation data
         if item.category == .conversationData {
             return .userDataType
         }
 
-        // Shared resources
         if item.category == .shared {
             return .sharedResource
         }
 
-        // Cache
         if item.category == .cache {
             return .safeToReplace
         }
 
-        // Logs
         if item.category == .logs {
             return .usuallySafe
         }
 
-        // Models
         if item.category == .downloadedModels {
             return .reviewFirst
         }
 
-        // Preferences (small ones are trivial)
         if item.category == .preferences && item.size < 50_000 {
             return .reviewFirst
         }
 
-        // Python environments
         if item.category == .pythonEnvironment {
             return .reviewFirst
         }
 
-        // Unknown or project data
         return .doNotAutoSelect
     }
 
-    /// Classify the association confidence.
     private func classifyAssociation(_ item: FoundItem) -> Association {
-        // Use rule engine if available
         if let primaryApp = item.primaryApplication {
-            // If we found a rule match, use its confidence
             return primaryApp.isInstalled ? .veryLikely : .possible
         }
 
-        // No app match found
         if item.category == .shared {
             return .shared
         }
 
         if item.tags.contains(where: { [.gguf, .safetensors, .model].contains($0) }) {
-            return .possible  // We know it's a model but not which app
+            return .possible
         }
 
         return .unknown
     }
 
-    /// Classify tags for an item.
     private func classifyTags(_ item: FoundItem) -> [Tag] {
-        let path = item.path.path
+        let path = item.path.path.lowercased()
         let filename = item.path.lastPathComponent.lowercased()
+        let components = item.path.pathComponents.map { $0.lowercased() }
         var tags: [Tag] = []
 
         if filename.hasSuffix(".gguf") { tags.append(.gguf) }
@@ -210,11 +290,12 @@ class Classifier {
         if path.contains(".venv") || path.contains("site-packages") { tags.append(.venv) }
         if path.contains(".cache/pip") { tags.append(.pipCache) }
         if path.contains(".cache/uv") { tags.append(.uvCache) }
-        if path.contains("model") && !isModelFile(filename) { tags.append(.model) }
+        if hasStrongModelEvidence(path: path, filename: filename, components: components) && !isModelFile(filename) {
+            tags.append(.model)
+        }
         if item.isSymlink { tags.append(.symlink) }
         if item.size > 5_000_000_000 { tags.append(.largeFile) }
 
         return tags
     }
-
 }

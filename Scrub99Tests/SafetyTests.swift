@@ -212,6 +212,76 @@ struct SafetyTests {
         )
         try expect(nodeModulesItem.readerGuide.whatItIs.contains("JavaScript packages"), "A node_modules path must receive the specific dependency explanation instead of only a generic project warning.")
 
+        // Classification regressions: storage category and finding origin are separate.
+        let classifier = Classifier()
+        let modelNamedSupport = FoundItem(
+            path: home.appendingPathComponent("Library/Application Support/Modeler Pro", isDirectory: true),
+            size: 1_024,
+            category: .unknown, safetyLevel: .unknown, association: .unknown
+        )
+        let classifiedModelNamedSupport = classifier.classify(items: [modelNamedSupport])[0]
+        try expect(classifiedModelNamedSupport.category == .applicationData, "An Application Support folder must be application data even when its product name contains 'Model'.")
+        try expect(!classifiedModelNamedSupport.tags.contains(.model), "A product/folder name containing 'Model' must not be treated as model weights without strong model evidence.")
+
+        let mixedCaseCache = FoundItem(
+            path: home.appendingPathComponent("Library/Caches/com.example.MixedCase", isDirectory: true),
+            size: 1_024,
+            category: .unknown, safetyLevel: .unknown, association: .unknown
+        )
+        let classifiedCache = classifier.classify(items: [mixedCaseCache])[0]
+        try expect(classifiedCache.category == .cache, "Library/Caches must classify as cache after lowercasing the path.")
+        try expect(classifiedCache.safetyLevel == .safeToReplace, "A classified cache must receive safe-to-replace safety when no stronger risk is present.")
+
+        let documentCandidate = FoundItem(
+            path: home.appendingPathComponent("Documents/Classifier Safety", isDirectory: true),
+            size: 1_024,
+            category: .unknown, safetyLevel: .unknown, association: .unknown
+        )
+        let classifiedDocument = classifier.classify(items: [documentCandidate])[0]
+        try expect(classifiedDocument.safetyLevel == .userDataType, "Documents must remain user data after path normalization.")
+
+        let ggufCandidate = FoundItem(
+            path: home.appendingPathComponent("Downloads/llama-3.gguf"),
+            size: 1_024,
+            category: .unknown, safetyLevel: .unknown, association: .unknown
+        )
+        let classifiedGGUF = classifier.classify(items: [ggufCandidate])[0]
+        try expect(classifiedGGUF.category == .downloadedModels, "A GGUF file must remain a downloaded model.")
+
+        let aiRule = ApplicationRule(name: "Claude", executableName: "claude", category: .ai, description: "AI fixture")
+        let removedAI = FoundItem(
+            path: home.appendingPathComponent("Library/Application Support/Claude", isDirectory: true),
+            size: 1_024,
+            category: .applicationData, safetyLevel: .reviewFirst, association: .veryLikely,
+            primaryApplication: ApplicationRef(name: "Claude", isInstalled: false)
+        )
+        try expect(Classifier.findingKind(for: removedAI, rules: [aiRule]) == .aiLeftover, "Known AI data with no installed owning app must be labeled AI Leftover.")
+
+        let installedAI = FoundItem(
+            path: home.appendingPathComponent("Library/Application Support/Claude", isDirectory: true),
+            size: 1_024,
+            category: .applicationData, safetyLevel: .reviewFirst, association: .confirmed,
+            primaryApplication: ApplicationRef(name: "Claude", isInstalled: true)
+        )
+        try expect(Classifier.findingKind(for: installedAI, rules: [aiRule]) == .aiAppData, "Known AI data for an installed app must be labeled AI App Data rather than leftover.")
+
+        let ordinaryPhantom = FoundItem(
+            path: phantomSupport,
+            size: 1_024,
+            category: .applicationData, safetyLevel: .reviewFirst, association: .veryLikely,
+            primaryApplication: ApplicationRef(name: "Qrookie", isInstalled: false),
+            reason: "Immediate child of an expanded inventory root in the Phantom Application Audit rule"
+        )
+        try expect(Classifier.findingKind(for: ordinaryPhantom, rules: [aiRule]) == .applicationLeftover, "An orphaned ordinary Application Support namespace must be labeled App Leftover, not AI Leftover.")
+
+        let housekeepingKind = FoundItem(
+            path: npmCache,
+            size: 1_024,
+            category: .cache, safetyLevel: .safeToReplace, association: .confirmed,
+            primaryApplication: ApplicationRef(name: "macOS Housekeeping", isInstalled: true)
+        )
+        try expect(Classifier.findingKind(for: housekeepingKind, rules: [aiRule]) == .housekeeping, "Known housekeeping paths must remain separate from AI and app leftovers.")
+
         let smallSortItem = FoundItem(
             path: home.appendingPathComponent("Small"), size: 10,
             category: .cache, safetyLevel: .safeToReplace, association: .confirmed,
@@ -234,7 +304,7 @@ struct SafetyTests {
         try expect(ResultsSorter.groupNames(sortGroups, by: .size, ascending: false).first == "Large App", "Descending size sort must order application groups by aggregate measured size.")
         try expect(ResultsSorter.items(sortFixtures, by: .item, ascending: true).map(\.path.lastPathComponent) == ["Large", "Small", "Zulu"], "Item sort must use stable natural name ordering.")
 
-        print("Scrub99 safety, scanner, explanation, sorting, and quarantine tests passed: 40 assertions")
+        print("Scrub99 safety, scanner, classification, explanation, sorting, and quarantine tests passed: 50 assertions")
     }
 
     private static func item(

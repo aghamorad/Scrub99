@@ -28,8 +28,10 @@ mkdir -p "$BUILD_DIR/ModuleCache"
   "$ROOT_DIR/Scrub99/Sources/Core/Models.swift" \
   "$ROOT_DIR/Scrub99/Sources/Core/GlobMatcher.swift" \
   "$ROOT_DIR/Scrub99/Sources/Core/ApplicationRules.swift" \
+  "$ROOT_DIR/Scrub99/Sources/Core/RuleEngine.swift" \
   "$ROOT_DIR/Scrub99/Sources/Scanner/ScanModels.swift" \
   "$ROOT_DIR/Scrub99/Sources/Scanner/BoundedScanner.swift" \
+  "$ROOT_DIR/Scrub99/Sources/Classifier/Classifier.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafetyPolicy.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/CleanupModels.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafeCleanupEngine.swift" \

@@ -116,6 +116,7 @@ struct ResultsView: View {
         return items.filter { item in
             item.path.path.localizedCaseInsensitiveContains(query) ||
             item.category.displayName.localizedCaseInsensitiveContains(query) ||
+            item.findingKind.rawValue.localizedCaseInsensitiveContains(query) ||
             (item.primaryApplication?.name.localizedCaseInsensitiveContains(query) ?? false)
         }
     }
@@ -138,7 +139,7 @@ struct ResultsView: View {
                 .padding(.bottom, 8)
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
-                    TextField("Filter by name, full path, app, or category", text: $searchText)
+                    TextField("Filter by name, full path, app, finding type, or category", text: $searchText)
                         .textFieldStyle(.roundedBorder)
                     if !searchText.isEmpty {
                         Button("Clear") { searchText = "" }
@@ -186,8 +187,13 @@ struct SummaryBar: View {
             Text("Found \(results.foundItems.count) reviewable items").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
             Spacer()
             Text("Selected: \(selectedSize.humanReadable)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            if results.summary.remnantsFound > 0 {
-                Text("App removed: \(results.summary.remnantsFound)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
+            let aiLeftovers = results.foundItems.filter { $0.findingKind == .aiLeftover }.count
+            let appLeftovers = results.foundItems.filter { $0.findingKind == .applicationLeftover }.count
+            if aiLeftovers > 0 {
+                Text("AI leftovers: \(aiLeftovers)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
+            }
+            if appLeftovers > 0 {
+                Text("App leftovers: \(appLeftovers)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
             }
             Text("Measured \(results.scannedPaths.count) paths").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
         }
@@ -232,7 +238,7 @@ struct ResultsTreeView: View {
                     changeSort(to: .size)
                 }
                 .frame(width: 90, alignment: .trailing)
-                SortHeader(label: "Status and safety", field: .status, activeField: sortField, ascending: sortAscending, alignment: .leading) {
+                SortHeader(label: "Type / status / safety", field: .status, activeField: sortField, ascending: sortAscending, alignment: .leading) {
                     changeSort(to: .status)
                 }
                 .frame(width: 210, alignment: .leading)
@@ -304,7 +310,9 @@ struct AppGroupSection: View {
                 Text(items.count > 1 ? "\(items.count) items" : items.first?.category.displayName ?? "")
                     .font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText).frame(width: 150, alignment: .leading)
                 Text(totalSize.humanReadable).font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText).frame(width: 90, alignment: .trailing)
-                Text(containsProtectedWorkspace ? "Protected workspace" : (isRemnant ? "App removed" : "\(selectedSize.humanReadable) selected"))
+                Text(containsProtectedWorkspace
+                    ? "User / Project Data · Protected workspace"
+                    : "\(items.first?.findingKind.rawValue ?? "Other") · " + (isRemnant ? "App removed" : "\(selectedSize.humanReadable) selected"))
                     .font(RetroTypography.smallFont)
                     .foregroundColor(RetroColors.darkText)
                     .frame(width: 210, alignment: .leading)
@@ -368,7 +376,7 @@ struct ResultRow: View {
                         .foregroundColor(RetroColors.darkText)
                         .frame(width: 90, alignment: .trailing)
 
-                    Text("\(item.association.rawValue) · \(item.safetyLevel.rawValue)")
+                    Text("\(item.findingKind.rawValue) · \(item.association.rawValue) · \(item.safetyLevel.rawValue)")
                         .font(RetroTypography.smallFont)
                         .foregroundColor(RetroColors.darkText)
                         .lineLimit(2)
@@ -414,6 +422,8 @@ struct ResultDetailsPane: View {
 
                     detailBlock("Full path", item.path.path)
                     detailBlock("Measured size", item.size.humanReadable)
+                    detailBlock("Finding type", item.findingKind.rawValue)
+                    detailBlock("Why this type", item.findingKind.explanation)
                     detailBlock("Category", item.category.displayName)
                     detailBlock("Associated with", item.primaryApplication?.name ?? "Unknown")
                     detailBlock("Association", item.association.rawValue)
