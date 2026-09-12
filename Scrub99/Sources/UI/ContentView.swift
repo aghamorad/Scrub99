@@ -468,7 +468,11 @@ private struct ResultsScreen: View {
                             }
                             .padding(.top, 4)
                         }
+                        // Same reason as the review sheet: with the modifiers the
+                        // other way round the block is always 120 points tall, so
+                        // one short note left a blank space under the disclosure.
                         .frame(maxHeight: 120)
+                        .fixedSize(horizontal: false, vertical: true)
                     } label: {
                         Text(showAllNotes
                              ? "Hide these details"

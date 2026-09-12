@@ -94,7 +94,7 @@ final class Scanner {
                 phase: "Sweep",
                 message: undeclaredCount == 0
                     ? "No undeclared folder over \(Self.minimumUndeclaredSize.humanReadable) was found outside the rule database."
-                    : "Found \(undeclaredCount) folders totaling \(undeclaredSize.humanReadable) that no rule in Scrub99's database describes."
+                    : "Found \(undeclaredCount) folders totaling \(undeclaredSize.humanReadable) that no rule in Scrub 99's database describes."
             ))
             if suppressedCount > 0 {
                 scanNotes.append(.init(
@@ -108,8 +108,8 @@ final class Scanner {
         if unreadableLocationCount > 0 {
             scanNotes.append(.cautionPhase(
                 unreadableLocationCount == 1
-                    ? "1 location could not be read, so it is missing from this list. macOS protects it from Scrub99 — usually because another app owns it."
-                    : "\(unreadableLocationCount) locations could not be read, so they are missing from this list. macOS protects them from Scrub99 — usually because another app owns them."
+                    ? "1 location could not be read, so it is missing from this list. macOS protects it from Scrub 99 — usually because another app owns it."
+                    : "\(unreadableLocationCount) locations could not be read, so they are missing from this list. macOS protects them from Scrub 99 — usually because another app owns them."
             ))
         }
 
@@ -314,7 +314,7 @@ final class Scanner {
             name: "Undeclared Paths",
             knownPaths: [],
             category: .system,
-            description: "A real folder that Scrub99's rule database does not describe."
+            description: "A real folder that Scrub 99's rule database does not describe."
         )
 
         // Root, category, and whether each child is an independent app namespace.
@@ -403,9 +403,9 @@ final class Scanner {
 
         let description: String
         if evidence.isInstalled {
-            description = "No rule in Scrub99's database describes this folder. It appears to belong to \(evidence.ownerName), which is installed on this Mac. Scrub99 cannot say what is inside it or whether it is safe to remove, so it is reported for inspection only."
+            description = "No rule in Scrub 99's database describes this folder. It appears to belong to \(evidence.ownerName), which is installed on this Mac. Scrub 99 cannot say what is inside it or whether it is safe to remove, so it is reported for inspection only."
         } else {
-            description = "No rule in Scrub99's database describes this folder. Its name suggests \(evidence.ownerName), but Scrub99 found no matching installed application. That makes it a candidate for residue left behind by something you removed. It is \(role) inside \(container); check the path and contents before trusting it."
+            description = "No rule in Scrub 99's database describes this folder. Its name suggests \(evidence.ownerName), but Scrub 99 found no matching installed application. That makes it a candidate for residue left behind by something you removed. It is \(role) inside \(container); check the path and contents before trusting it."
         }
 
         return ScanTarget(

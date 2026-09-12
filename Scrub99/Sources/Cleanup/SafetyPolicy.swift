@@ -92,7 +92,7 @@ struct CleanupSafetyPolicy {
             return Assessment(decision: .blocked, reason: "The path is outside the current user's home folder or is the home folder itself.")
         }
         guard !isDescendant(source, of: quarantineRoot), source != quarantineRoot else {
-            return Assessment(decision: .blocked, reason: "Scrub99 cannot quarantine its own quarantine records.")
+            return Assessment(decision: .blocked, reason: "Scrub 99 cannot quarantine its own quarantine records.")
         }
         guard fileManager.fileExists(atPath: source.path) else {
             return Assessment(decision: .blocked, reason: "The item no longer exists at the scanned path.")
@@ -111,11 +111,11 @@ struct CleanupSafetyPolicy {
         }
 
         guard !isNeverQuarantinablePath(source) else {
-            return Assessment(decision: .blocked, reason: "Credential, cloud, communications, and photo-library paths cannot be quarantined by Scrub99.")
+            return Assessment(decision: .blocked, reason: "Credential, cloud, communications, and photo-library paths cannot be quarantined by Scrub 99.")
         }
 
         if isGuardedRoot(source) {
-            return Assessment(decision: .blocked, reason: "Scrub99 will not move an entire standard user or workspace root.")
+            return Assessment(decision: .blocked, reason: "Scrub 99 will not move an entire standard user or workspace root.")
         }
 
         // Checked here rather than earlier because it is the one question that
@@ -140,7 +140,7 @@ struct CleanupSafetyPolicy {
         if item.isUndeclared {
             return Assessment(
                 decision: .reviewOnly,
-                reason: "No rule in Scrub99's database describes this path; it was found by sweeping the folders where undeclared data collects. It can enter reversible quarantine only after the additional typed confirmation."
+                reason: "No rule in Scrub 99's database describes this path; it was found by sweeping the folders where undeclared data collects. It can enter reversible quarantine only after the additional typed confirmation."
             )
         }
 

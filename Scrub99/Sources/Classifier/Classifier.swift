@@ -34,9 +34,9 @@ enum FindingKind: String, CaseIterable {
     /// means, in their terms rather than Scrub99's.
     var tagline: String {
         switch self {
-        case .undeclared: return "Real folders Scrub99 has no rule for"
+        case .undeclared: return "Real folders Scrub 99 has no rule for"
         case .aiAppData: return "Belongs to an AI app you still have installed"
-        case .aiLeftover: return "Belongs to an AI app Scrub99 cannot find installed"
+        case .aiLeftover: return "Belongs to an AI app Scrub 99 cannot find installed"
         case .applicationLeftover: return "Looks like residue from an app that is no longer installed"
         case .housekeeping: return "Caches, logs, and package-manager leftovers"
         case .userProject: return "Your own project and workspace data — never ticked for you"
@@ -59,19 +59,19 @@ enum FindingKind: String, CaseIterable {
     var explanation: String {
         switch self {
         case .undeclared:
-            return "Scrub99 measured this path while sweeping the folders where undeclared data collects, but no rule in its database describes it. Nothing here is a judgment about whether the contents matter — only that Scrub99 found real, measured storage it has no rule for."
+            return "Scrub 99 measured this path while sweeping the folders where undeclared data collects, but no rule in its database describes it. Nothing here is a judgment about whether the contents matter — only that Scrub 99 found real, measured storage it has no rule for."
         case .aiAppData:
-            return "This path belongs to a known AI application or AI tool that Scrub99 currently detects as installed or active."
+            return "This path belongs to a known AI application or AI tool that Scrub 99 currently detects as installed or active."
         case .aiLeftover:
-            return "This path matches a known AI application rule, but Scrub99 does not currently detect that application as installed."
+            return "This path matches a known AI application rule, but Scrub 99 does not currently detect that application as installed."
         case .applicationLeftover:
-            return "This path was found in an app-facing Library location, but Scrub99 could not find an installed application that appears to own the namespace."
+            return "This path was found in an app-facing Library location, but Scrub 99 could not find an installed application that appears to own the namespace."
         case .housekeeping:
             return "This is a known operating-system, shell, package-manager, or developer-tool housekeeping path."
         case .userProject:
             return "This is user-created project or workspace data. It is shown for awareness and must not be treated as disposable application residue."
         case .other:
-            return "This finding does not fit Scrub99's AI, application-leftover, housekeeping, or user-project origin groups."
+            return "This finding does not fit Scrub 99's AI, application-leftover, housekeeping, or user-project origin groups."
         }
     }
 }

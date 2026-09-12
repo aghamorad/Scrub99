@@ -65,7 +65,12 @@ struct CleanupView: View {
                             }
                         }
                     }
+                    // Order matters: the frame caps a long list at 170 points and
+                    // the trailing fixedSize lets a short one shrink to fit. Put
+                    // them the other way round and the panel is always 170 points
+                    // tall, with a one-item selection stranded in the middle.
                     .frame(maxHeight: 170)
+                    .fixedSize(horizontal: false, vertical: true)
 
                     if !protectedItems.isEmpty {
                         HStack {
@@ -73,7 +78,7 @@ struct CleanupView: View {
                                 .font(style.smallFont.bold())
                                 .foregroundColor(style.negative)
                             Spacer()
-                            Text("\(protectedItems.count) path(s) · \(protectedItems.reduce(0) { $0 + $1.size }.sizeDescription)")
+                            Text("\(protectedItems.count) path\(protectedItems.count == 1 ? "" : "s") · \(protectedItems.reduce(0) { $0 + $1.size }.sizeDescription)")
                                 .font(style.smallFont)
                                 .foregroundColor(style.negative)
                         }
@@ -215,7 +220,7 @@ struct GuidedCleanupView: View {
             }
         }
 
-        Text("Scrub99 classified this as a rule-backed, low-risk cache or log candidate. That is a recommendation, not proof that you do not need it. Decide on this item before Scrub99 proceeds.")
+        Text("Scrub 99 classified this as a rule-backed, low-risk cache or log candidate. That is a recommendation, not proof that you do not need it. Decide on this item before Scrub 99 proceeds.")
             .font(style.smallFont)
             .foregroundColor(style.text)
             .fixedSize(horizontal: false, vertical: true)

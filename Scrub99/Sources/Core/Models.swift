@@ -171,7 +171,7 @@ enum ItemCategory: String, Codable, CaseIterable, Identifiable {
         case .shared:
             return "Shared Resource — Used by multiple applications. Not automatically selected."
         case .unknown:
-            return "Unknown — Scrub99 cannot confidently classify this data. Manual review recommended."
+            return "Unknown — Scrub 99 cannot confidently classify this data. Manual review recommended."
         }
     }
 
@@ -225,13 +225,13 @@ enum SafetyLevel: String, Codable, CaseIterable, Identifiable {
         case .reviewFirst:
             return "This directory may contain application settings, history, or other persistent data. Removing it may reset the application."
         case .userDataType:
-            return "This appears to be data you created or care about. Scrub99 will never delete user data automatically."
+            return "This appears to be data you created or care about. Scrub 99 will never delete user data automatically."
         case .sharedResource:
             return "Multiple applications may rely on this directory. Removing it could affect more than one program."
         case .doNotAutoSelect:
-            return "This is important data. Scrub99 will not select it for cleanup without your explicit review."
+            return "This is important data. Scrub 99 will not select it for cleanup without your explicit review."
         case .unknown:
-            return "Scrub99 cannot confidently classify this data. Please review it manually before deciding."
+            return "Scrub 99 cannot confidently classify this data. Please review it manually before deciding."
         }
     }
 }
@@ -250,15 +250,15 @@ enum Association: String, Codable, Identifiable {
     var explanation: String {
         switch self {
         case .confirmed:
-            return "The folder name, bundle identifier, and files inside all correspond to this application. Scrub99 is confident in this association."
+            return "The folder name, bundle identifier, and files inside all correspond to this application. Scrub 99 is confident in this association."
         case .veryLikely:
-            return "The folder name, bundle identifier, and files inside correspond to this application, but Scrub99 cannot prove that another program does not also use this directory."
+            return "The folder name, bundle identifier, and files inside correspond to this application, but Scrub 99 cannot prove that another program does not also use this directory."
         case .possible:
-            return "Scrub99 found evidence suggesting this may belong to the application, but the match is not certain. File types and directory names provide partial evidence."
+            return "Scrub 99 found evidence suggesting this may belong to the application, but the match is not certain. File types and directory names provide partial evidence."
         case .shared:
-            return "Several programs may use this folder. Scrub99 found evidence that multiple applications share this directory."
+            return "Several programs may use this folder. Scrub 99 found evidence that multiple applications share this directory."
         case .unknown:
-            return "Scrub99 could not determine which application created this data, or found conflicting evidence."
+            return "Scrub 99 could not determine which application created this data, or found conflicting evidence."
         }
     }
 
@@ -569,7 +569,7 @@ extension FoundItem {
                 whyItExists: "The application uses it to authenticate without asking you to sign in for every operation.",
                 necessity: "Usually necessary for authenticated features.",
                 risk: .high,
-                riskExplanation: "Removing it can sign you out or make services inaccessible. Scrub99 blocks known credential locations from quarantine."
+                riskExplanation: "Removing it can sign you out or make services inaccessible. Scrub 99 blocks known credential locations from quarantine."
             )
         case .projectData:
             return FindingReaderGuide(
@@ -597,7 +597,7 @@ extension FoundItem {
             )
         case .unknown:
             return FindingReaderGuide(
-                whatItIs: "A path Scrub99 could inventory but could not classify reliably.",
+                whatItIs: "A path Scrub 99 could inventory but could not classify reliably.",
                 whyItExists: "The available rule and filesystem evidence do not establish its purpose.",
                 necessity: "Unknown. Treat it as necessary until you identify its owner and contents.",
                 risk: .unknown,

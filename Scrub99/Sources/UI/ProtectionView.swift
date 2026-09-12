@@ -61,7 +61,7 @@ struct ProtectionView: View {
                 VStack(spacing: 6) {
                     Text("Nothing is on the left-alone list.")
                         .font(style.bodyFont)
-                    Text("Everything Scrub 99 finds is judged by its rules alone right now. When something keeps coming back that you know you want, open it and press “Always Leave This Alone”.")
+                    Text("Everything Scrub 99 finds is judged by its rules alone right now. When something keeps coming back that you know you want, open it and press “Leave It Alone”. It stops being offered, on this scan and every later one.")
                         .font(style.smallFont)
                         .foregroundColor(style.secondaryText)
                         .multilineTextAlignment(.center)

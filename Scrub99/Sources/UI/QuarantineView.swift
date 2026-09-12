@@ -136,9 +136,17 @@ struct QuarantineView: View {
 
     private var footerSummary: String {
         if showingHistory {
-            return transactions.isEmpty
-                ? "No cleanups recorded yet."
-                : "\(transactions.count) cleanup\(transactions.count == 1 ? "" : "s") recorded · \(transactions.reduce(0) { $0 + $1.waitingSize }.sizeDescription) still waiting out of \(transactions.reduce(0) { $0 + $1.totalSize }.sizeDescription) moved in total"
+            guard !transactions.isEmpty else { return "No cleanups recorded yet." }
+            let recorded = "\(transactions.count) cleanup\(transactions.count == 1 ? "" : "s") recorded"
+            let waiting = transactions.reduce(0) { $0 + $1.waitingSize }
+            let moved = transactions.reduce(0) { $0 + $1.totalSize }
+            if waiting > 0 {
+                return "\(recorded) · \(waiting.sizeDescription) still waiting out of \(moved.sizeDescription) moved in total"
+            }
+            if moved > 0 {
+                return "\(recorded) · \(moved.sizeDescription) moved in total, none of it still waiting"
+            }
+            return "\(recorded), and none of them moved anything"
         }
         return entries.isEmpty
             ? "Nothing waiting here."

@@ -8,6 +8,9 @@ This release is about being able to tell Scrub99 what to leave alone, and about 
 - Ships a universal binary for Apple silicon and Intel, with separate downloads for each architecture alongside it.
 - Documents four rule files that had been shipping undocumented (`chrome.json`, `codex.json`, `gapcode.json`, `gemini.json`), and corrects the architecture listing, which named a source file that never existed.
 - Fixes `script/package_release.sh`, which had gone stale: it did not list `ProtectionList.swift` and so could no longer build the app at all, and it was arm64-only.
+- Fixes two panels that drew a large blank box around a short list. A `ScrollView` claims all the height it is offered, so a one-item quarantine review and a one-line hidden-detail note each left an empty block under their content. Both now grow to their content and stop at a cap.
+- Fixes the count in the quarantine review, which read “1 path(s)”.
+- Writes the app's name as **Scrub 99** everywhere in its own prose, matching the title bar and the Info.plist display name. Earlier builds called themselves Scrub99 in about two dozen sentences while the window above them said Scrub 99. The quarantine folder and the Application Support directory keep their existing names, so nothing already quarantined is orphaned.
 
 The distributed build is ad-hoc signed for local use on macOS 13 or later. It is not notarized.
 
