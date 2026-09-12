@@ -1,0 +1,38 @@
+{
+  "name": "Codex",
+  "bundleIdentifier": null,
+  "executableName": "codex",
+  "knownPaths": [
+    {
+      "relativePath": ".codex",
+      "category": "applicationData",
+      "description": "Codex CLI home. Holds config.toml, auth.json, session rollouts, logs, queue databases, memories, and installed skills/plugins. Persistent tool state, not disposable cache.",
+      "inventoryDepth": 1
+    },
+    {
+      "relativePath": ".cache/codex-runtimes",
+      "category": "cache",
+      "description": "Downloaded Codex runtime bundles. Re-downloaded automatically when Codex next runs."
+    }
+  ],
+  "filePatterns": [
+    {
+      "pattern": "history.jsonl",
+      "directory": ".codex",
+      "category": "conversationData",
+      "description": "Codex prompt history"
+    }
+  ],
+  "keywords": [
+    "codex",
+    "openai-codex"
+  ],
+  "confidenceBoosters": [
+    "executableMatch",
+    "appNameMatch"
+  ],
+  "installMethod": "directDownload",
+  "homepageURL": "https://openai.com/codex/",
+  "category": "ai",
+  "description": "Codex CLI — OpenAI's local coding agent."
+}

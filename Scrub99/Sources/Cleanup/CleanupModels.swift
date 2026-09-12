@@ -49,6 +49,55 @@ struct PermanentDeletionResult {
     let failed: [(QuarantineEntry, String)]
 }
 
+/// One cleanup run, rebuilt from the record Scrub 99 writes next to the items it
+/// moved. That record is the only account of a cleanup that outlives the app
+/// being quit, so history is read from it rather than from anything held in
+/// memory — a run from a previous version still shows up, and the app cannot
+/// remember one thing and have the folder say another.
+struct CleanupTransaction: Identifiable {
+    /// The four things that can actually have happened to one item. There is no
+    /// fifth case, and each one has a different answer to "so where is my file".
+    enum ItemState: String, CaseIterable {
+        case waiting
+        case putBack
+        case deletedForever
+        case gone
+        case neverMoved
+    }
+
+    struct Item: Identifiable {
+        let id: UUID
+        let originalPath: String
+        let size: Int64
+        let category: String
+        let appName: String?
+        let state: ItemState
+
+        var name: String { (originalPath as NSString).lastPathComponent }
+    }
+
+    let id: UUID
+    let date: Date
+    let items: [Item]
+    /// Carried rather than looked up again when something is put back: a folder
+    /// adopted from an older version keeps its old name, so the record's own
+    /// location is the only thing that is always right.
+    let manifestURL: URL
+
+    var waitingItems: [Item] { items.filter { $0.state == .waiting } }
+    var waitingCount: Int { waitingItems.count }
+    var waitingSize: Int64 { waitingItems.reduce(0) { $0 + $1.size } }
+    var putBackCount: Int { items.filter { $0.state == .putBack }.count }
+    var deletedCount: Int { items.filter { $0.state == .deletedForever }.count }
+    var goneCount: Int { items.filter { $0.state == .gone }.count }
+    var neverMovedCount: Int { items.filter { $0.state == .neverMoved }.count }
+    var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
+
+    /// Only items still sitting in Quarantine can be put back; the rest have
+    /// already gone one way or the other, and offering the button would be a lie.
+    var canBePutBack: Bool { !waitingItems.isEmpty }
+}
+
 enum MovedItem {
     case quarantine(FoundItem, URL)
     case trash(FoundItem)

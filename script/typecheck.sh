@@ -36,6 +36,7 @@ mkdir -p "$BUILD_DIR/ModuleCache"
   "$ROOT_DIR"/Scrub99/Sources/Classifier/*.swift \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/CleanupModels.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafetyPolicy.swift" \
+  "$ROOT_DIR/Scrub99/Sources/Cleanup/ProtectionList.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafeCleanupEngine.swift" \
   "$ROOT_DIR"/Scrub99/Sources/UI/*.swift
 

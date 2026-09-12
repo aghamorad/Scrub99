@@ -61,6 +61,16 @@
       "category": "applicationData",
       "description": "Claude-related local vision data. Protected from cleanup.",
       "inventoryDepth": 1
+    },
+    {
+      "relativePath": ".claude.json",
+      "category": "credentials",
+      "description": "Claude Code's top-level state file. Holds MCP server configuration and per-project pointers. Tiny, but it is configuration rather than cache, and losing it costs more than the space it occupies."
+    },
+    {
+      "relativePath": ".cache/claude",
+      "category": "cache",
+      "description": "Claude Code cache. Rebuilt on demand."
     }
   ],
   "filePatterns": [

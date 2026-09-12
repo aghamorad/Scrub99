@@ -1,31 +1,51 @@
 import AppKit
 import Foundation
 
-/// Scans only roots explicitly described by the rule database. A scan produces
-/// an inventory and never mutates the filesystem.
+/// Scans roots described by the rule database, plus a sweep of the places where
+/// large undeclared data accumulates. The rule database can only describe what
+/// someone thought to write down, so the sweep exists to measure and report the
+/// rest rather than silently skipping it. A scan produces an inventory and never
+/// mutates the filesystem.
 final class Scanner {
+    /// Undeclared paths below this size are measured but not reported. Reporting
+    /// every stray 2 MB folder would bury the handful of folders that actually
+    /// account for the disk.
+    static let minimumUndeclaredSize: Int64 = 50_000_000
+
     private(set) var foundItems: [FoundItem] = []
     private(set) var scanNotes: [ScanResults.ScanNote] = []
     private(set) var scannedPaths: [URL] = []
 
+    /// Paths Scrub99 could not read at all, and files it could not measure inside
+    /// folders it did list. Kept as tallies rather than a note per path: a sandboxed
+    /// Library yields hundreds of permission failures, and one note each would fill
+    /// the results screen with the noise and push the findings off it.
+    private var unreadableLocationCount = 0
+    private var unmeasuredFileCount = 0
+
     private let applications: [ApplicationRule]
     private let fileManager: FileManager
     private let homeDirectory: URL
+    private let deepSweep: Bool
 
     init(
         applications: [ApplicationRule],
         fileManager: FileManager = .default,
-        homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())
+        homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()),
+        deepSweep: Bool = true
     ) {
         self.applications = applications
         self.fileManager = fileManager
         self.homeDirectory = homeDirectory.standardizedFileURL
+        self.deepSweep = deepSweep
     }
 
     func scan(progressHandler: @escaping (ScanProgress) -> Void) async throws -> ScanResults {
         foundItems = []
         scanNotes = []
         scannedPaths = []
+        unreadableLocationCount = 0
+        unmeasuredFileCount = 0
         let startDate = Date()
 
         guard !applications.isEmpty else {
@@ -35,8 +55,15 @@ final class Scanner {
         progressHandler(.phase("Detecting installed applications..."))
         let installedApplicationNames = detectInstalledApplicationNames()
         let rootTargets = buildTargets(installedApplicationNames: installedApplicationNames)
-        let targets = expandInventoryTargets(rootTargets)
-        progressHandler(.phase("Auditing \(targets.count) known storage locations..."))
+        let targets = dedupeInventory(expandInventoryTargets(rootTargets))
+        progressHandler(.phase(deepSweep
+            ? "Auditing \(targets.count) storage locations, including undeclared ones..."
+            : "Auditing \(targets.count) known storage locations..."))
+
+        var undeclaredCount = 0
+        var undeclaredSize: Int64 = 0
+        var suppressedCount = 0
+        var suppressedSize: Int64 = 0
 
         for (index, target) in targets.enumerated() {
             try Task.checkCancellation()
@@ -48,9 +75,50 @@ final class Scanner {
             ))
 
             guard fileManager.fileExists(atPath: target.url.path) else { continue }
-            if let item = try await inspect(target) {
-                foundItems.append(item)
+            guard let item = try await inspect(target) else { continue }
+
+            if target.isUndeclared && item.size < Self.minimumUndeclaredSize {
+                suppressedCount += 1
+                suppressedSize += item.size
+                continue
             }
+            if target.isUndeclared {
+                undeclaredCount += 1
+                undeclaredSize += item.size
+            }
+            foundItems.append(item)
+        }
+
+        if deepSweep {
+            scanNotes.append(.init(
+                phase: "Sweep",
+                message: undeclaredCount == 0
+                    ? "No undeclared folder over \(Self.minimumUndeclaredSize.humanReadable) was found outside the rule database."
+                    : "Found \(undeclaredCount) folders totaling \(undeclaredSize.humanReadable) that no rule in Scrub99's database describes."
+            ))
+            if suppressedCount > 0 {
+                scanNotes.append(.init(
+                    phase: "Sweep",
+                    message: "\(suppressedCount) undeclared folders under \(Self.minimumUndeclaredSize.humanReadable) (\(suppressedSize.humanReadable) combined) were measured but left out of the list to keep it readable."
+                ))
+            }
+        }
+
+
+        if unreadableLocationCount > 0 {
+            scanNotes.append(.cautionPhase(
+                unreadableLocationCount == 1
+                    ? "1 location could not be read, so it is missing from this list. macOS protects it from Scrub99 — usually because another app owns it."
+                    : "\(unreadableLocationCount) locations could not be read, so they are missing from this list. macOS protects them from Scrub99 — usually because another app owns them."
+            ))
+        }
+
+        if unmeasuredFileCount > 0 {
+            scanNotes.append(.cautionPhase(
+                unmeasuredFileCount == 1
+                    ? "1 file inside a listed folder could not be measured, so that folder's size reads low."
+                    : "\(unmeasuredFileCount) files inside listed folders could not be measured, so some sizes read low."
+            ))
         }
 
         foundItems.sort {
@@ -64,7 +132,7 @@ final class Scanner {
         let duration = Date().timeIntervalSince(startDate)
         scanNotes.append(.init(
             phase: "Found",
-            message: "\(foundItems.count) rule-backed locations totaling \(summary.totalSize.humanReadable)"
+            message: "\(foundItems.count) locations totaling \(summary.totalSize.humanReadable)"
         ))
 
         let results = ScanResults(
@@ -85,6 +153,9 @@ final class Scanner {
         let app: ApplicationRef
         let association: Association
         let isInventoryChild: Bool
+        /// True only for paths discovered by the undeclared-path sweep, which are
+        /// subject to the size floor and are described differently in the UI.
+        let isUndeclared: Bool
     }
 
     private func buildTargets(installedApplicationNames: Set<String>) -> [ScanTarget] {
@@ -109,15 +180,53 @@ final class Scanner {
                     rule: rule,
                     app: app,
                     association: association,
-                    isInventoryChild: false
+                    isInventoryChild: false,
+                    isUndeclared: false
                 ))
             }
         }
 
         targets.append(contentsOf: buildHousekeepingTargets(seenPaths: &seenPaths))
-        targets.append(contentsOf: buildPhantomApplicationTargets(seenPaths: &seenPaths))
+
+        // The installed-application inventory is one directory walk over the
+        // application folders. Both audits below need it, so it is built once.
+        let installedEvidence = installedApplicationEvidence()
+        targets.append(contentsOf: buildPhantomApplicationTargets(
+            seenPaths: &seenPaths,
+            installed: installedEvidence
+        ))
+        if deepSweep {
+            targets.append(contentsOf: buildUndeclaredTargets(
+                seenPaths: &seenPaths,
+                installed: installedEvidence
+            ))
+        }
 
         return targets
+    }
+
+    /// Collapses targets that resolve to the same path, preferring a target the
+    /// rule database declared explicitly over one produced by expanding a parent
+    /// into an inventory. `~/.gemini/users` is both a declared path (classified as
+    /// conversation history) and a child of the depth-1 `~/.gemini` inventory; only
+    /// the declared classification is correct, so it must win.
+    private func dedupeInventory(_ targets: [ScanTarget]) -> [ScanTarget] {
+        var best: [String: ScanTarget] = [:]
+        var order: [String] = []
+
+        for target in targets {
+            let key = target.url.standardizedFileURL.path
+            guard let existing = best[key] else {
+                best[key] = target
+                order.append(key)
+                continue
+            }
+            if existing.isInventoryChild && !target.isInventoryChild {
+                best[key] = target
+            }
+        }
+
+        return order.compactMap { best[$0] }
     }
 
     // MARK: - Phantom application audit
@@ -125,8 +234,10 @@ final class Scanner {
     /// Enumerates the app-facing Library locations that commonly survive an
     /// uninstall. This is deliberately shallow: it reports the app namespace
     /// as one reviewable item and never guesses that its contents are junk.
-    private func buildPhantomApplicationTargets(seenPaths: inout Set<String>) -> [ScanTarget] {
-        let installed = installedApplicationEvidence()
+    private func buildPhantomApplicationTargets(
+        seenPaths: inout Set<String>,
+        installed: InstalledApplicationEvidence
+    ) -> [ScanTarget] {
         let housekeeping = ApplicationRule(
             name: "Phantom Application Audit",
             knownPaths: [],
@@ -156,8 +267,12 @@ final class Scanner {
 
             for child in children {
                 let normalized = child.standardizedFileURL
-                guard seenPaths.insert(normalized.path).inserted,
-                      shouldAuditAsPhantom(child, root: relativeRoot, installed: installed) else { continue }
+                // The ownership test must run before the path is marked as seen.
+                // A path this audit rejects because an installed app owns it is
+                // exactly the kind of path the undeclared sweep needs to see, so
+                // recording it here would hide it from that sweep.
+                guard shouldAuditAsPhantom(child, root: relativeRoot, installed: installed),
+                      seenPaths.insert(normalized.path).inserted else { continue }
 
                 let label = phantomApplicationName(for: child.lastPathComponent)
                 let app = ApplicationRef(
@@ -171,12 +286,181 @@ final class Scanner {
                     rule: housekeeping,
                     app: app,
                     association: .veryLikely,
-                    isInventoryChild: true
+                    isInventoryChild: true,
+                    isUndeclared: false
                 ))
             }
         }
 
         return targets
+    }
+
+    // MARK: - Undeclared path sweep
+
+    /// Enumerates the places where large amounts of data actually accumulate and
+    /// reports anything the rule database does not describe. This is the answer to
+    /// "the app cleaned 4 GB but the disk still shrank by 37 GB": a rule database
+    /// can only describe what someone wrote down, and the largest folders on a real
+    /// machine are usually not in it.
+    ///
+    /// Swept paths are never assumed to be disposable. Ownership evidence decides
+    /// the association, and anything without a confirmed owner is blocked from
+    /// quarantine by `CleanupSafetyPolicy`.
+    private func buildUndeclaredTargets(
+        seenPaths: inout Set<String>,
+        installed: InstalledApplicationEvidence
+    ) -> [ScanTarget] {
+        let rule = ApplicationRule(
+            name: "Undeclared Paths",
+            knownPaths: [],
+            category: .system,
+            description: "A real folder that Scrub99's rule database does not describe."
+        )
+
+        // Root, category, and whether each child is an independent app namespace.
+        let sweptRoots: [(String, ItemCategory, String)] = [
+            ("Library/Application Support", .applicationData, "persistent application data"),
+            ("Library/Group Containers", .applicationData, "a sandboxed group container"),
+            ("Library/Caches", .cache, "an application cache"),
+            ("Library/Logs", .logs, "an application log folder"),
+            (".cache", .cache, "a tool cache in your home directory")
+        ]
+
+        var targets: [ScanTarget] = []
+
+        for (relativeRoot, category, role) in sweptRoots {
+            let root = homeDirectory.appendingPathComponent(relativeRoot, isDirectory: true)
+            guard let children = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: []
+            ) else { continue }
+
+            for child in children {
+                let normalized = child.standardizedFileURL
+                guard seenPaths.insert(normalized.path).inserted else { continue }
+                targets.append(makeUndeclaredTarget(
+                    normalized,
+                    category: category,
+                    role: role,
+                    container: relativeRoot,
+                    installed: installed,
+                    rule: rule
+                ))
+            }
+        }
+
+        // Home dot-directories. Structural containers are skipped because their
+        // contents are enumerated individually, and lumping them together would
+        // report one enormous folder whose size no single decision can act on.
+        // `.Trash` is skipped because its contents are already staged for
+        // deletion and emptying it is a separate, all-or-nothing decision.
+        let structuralDotDirectories: Set<String> = [
+            ".Trash", ".config", ".npm", ".bun", ".git"
+        ]
+        if let dotEntries = try? fileManager.contentsOfDirectory(
+            at: homeDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsSubdirectoryDescendants]
+        ) {
+            for entry in dotEntries where entry.lastPathComponent.hasPrefix(".") {
+                let name = entry.lastPathComponent
+                guard !structuralDotDirectories.contains(name),
+                      !name.hasPrefix(".DS_"),
+                      name != ".DS_Store" else { continue }
+                let normalized = entry.standardizedFileURL
+                guard seenPaths.insert(normalized.path).inserted else { continue }
+                targets.append(makeUndeclaredTarget(
+                    normalized,
+                    category: .applicationData,
+                    role: "a hidden folder in your home directory",
+                    container: "home",
+                    installed: installed,
+                    rule: rule
+                ))
+            }
+        }
+
+        return targets
+    }
+
+    private func makeUndeclaredTarget(
+        _ url: URL,
+        category: ItemCategory,
+        role: String,
+        container: String,
+        installed: InstalledApplicationEvidence,
+        rule: ApplicationRule
+    ) -> ScanTarget {
+        let rawName = url.lastPathComponent
+        let evidence = undeclaredOwnerEvidence(for: rawName, installed: installed)
+
+        let app = ApplicationRef(
+            name: evidence.ownerName,
+            bundleIdentifier: evidence.bundleIdentifier,
+            isInstalled: evidence.isInstalled
+        )
+
+        let description: String
+        if evidence.isInstalled {
+            description = "No rule in Scrub99's database describes this folder. It appears to belong to \(evidence.ownerName), which is installed on this Mac. Scrub99 cannot say what is inside it or whether it is safe to remove, so it is reported for inspection only."
+        } else {
+            description = "No rule in Scrub99's database describes this folder. Its name suggests \(evidence.ownerName), but Scrub99 found no matching installed application. That makes it a candidate for residue left behind by something you removed. It is \(role) inside \(container); check the path and contents before trusting it."
+        }
+
+        return ScanTarget(
+            url: url,
+            knownPath: KnownPath(
+                relativePath: url.path.replacingOccurrences(of: homeDirectory.path + "/", with: ""),
+                category: category,
+                description: description
+            ),
+            rule: rule,
+            app: app,
+            association: evidence.isInstalled ? .veryLikely : .possible,
+            isInventoryChild: true,
+            isUndeclared: true
+        )
+    }
+
+    private struct UndeclaredOwnerEvidence {
+        /// Best available name for whatever seems to own the folder. Always
+        /// non-empty: it falls back to the folder's own name when nothing
+        /// better can be established.
+        var ownerName: String
+        var bundleIdentifier: String?
+        var isInstalled: Bool
+    }
+
+    /// Identifies a likely owner for an undeclared folder using only local
+    /// evidence: a reverse-DNS folder name, or a folder name matching an
+    /// installed application. No guess is promoted to "installed".
+    private func undeclaredOwnerEvidence(
+        for rawName: String,
+        installed: InstalledApplicationEvidence
+    ) -> UndeclaredOwnerEvidence {
+        let trimmed = rawName.replacingOccurrences(of: ".plist", with: "")
+        let bundleIdentifier = probableBundleIdentifier(for: trimmed)
+        let ownerName = phantomApplicationName(for: trimmed)
+
+        if let identifier = bundleIdentifier,
+           installed.identifiers.contains(normalize(identifier)) {
+            return UndeclaredOwnerEvidence(
+                ownerName: ownerName,
+                bundleIdentifier: bundleIdentifier,
+                isInstalled: true
+            )
+        }
+
+        if installed.names.contains(normalize(trimmed)) {
+            return UndeclaredOwnerEvidence(ownerName: ownerName, bundleIdentifier: bundleIdentifier, isInstalled: true)
+        }
+
+        return UndeclaredOwnerEvidence(
+            ownerName: ownerName,
+            bundleIdentifier: bundleIdentifier,
+            isInstalled: false
+        )
     }
 
     private struct InstalledApplicationEvidence {
@@ -314,7 +598,8 @@ final class Scanner {
                 rule: rule,
                 app: app,
                 association: .confirmed,
-                isInventoryChild: false
+                isInventoryChild: false,
+                isUndeclared: false
             ))
         }
 
@@ -333,7 +618,8 @@ final class Scanner {
                     rule: rule,
                     app: app,
                     association: .confirmed,
-                    isInventoryChild: false
+                    isInventoryChild: false,
+                    isUndeclared: false
                 ))
             }
         }
@@ -361,17 +647,20 @@ final class Scanner {
                 return children.map { child in
                     ScanTarget(
                         url: child.standardizedFileURL,
-                        knownPath: target.knownPath,
+                        knownPath: KnownPath(
+                            relativePath: target.knownPath.relativePath,
+                            category: target.knownPath.category,
+                            description: target.knownPath.inventoryDescription ?? target.knownPath.description
+                        ),
                         rule: target.rule,
                         app: target.app,
                         association: target.association,
-                        isInventoryChild: true
+                        isInventoryChild: true,
+                        isUndeclared: target.isUndeclared
                     )
                 }
             } catch {
-                scanNotes.append(.cautionPhase(
-                    "Could not list \(target.url.abbreviatingWithTilde(homeDirectory: homeDirectory)): \(error.localizedDescription)"
-                ))
+                unreadableLocationCount += 1
                 return [target]
             }
         }
@@ -385,7 +674,7 @@ final class Scanner {
                 .contentAccessDateKey, .fileAllocatedSizeKey, .totalFileAllocatedSizeKey
             ])
         } catch {
-            scanNotes.append(.cautionPhase("Could not read metadata for \(target.url.abbreviatingWithTilde(homeDirectory: homeDirectory)): \(error.localizedDescription)"))
+            unreadableLocationCount += 1
             return nil
         }
 
@@ -418,15 +707,18 @@ final class Scanner {
             safetyLevel: safety,
             association: target.association,
             primaryApplication: target.app,
-            reason: target.isInventoryChild
-                ? "Immediate child of an expanded inventory root in the \(target.rule.name) rule"
-                : "Exact path from the \(target.rule.name) rule",
+            reason: target.isUndeclared
+                ? "Found by sweeping \(target.url.deletingLastPathComponent().abbreviatingWithTilde(homeDirectory: homeDirectory)) — no rule describes this path"
+                : (target.isInventoryChild
+                    ? "Immediate child of an expanded inventory root in the \(target.rule.name) rule"
+                    : "Exact path from the \(target.rule.name) rule"),
             explanation: target.rule.name == "Phantom Application Audit"
                 ? "\(target.knownPath.description) No installed application matching this namespace was found in the current application inventory. Reported separately so its exact path, size, and contents can be reviewed before reversible quarantine."
                 : (target.isInventoryChild
                     ? "\(target.knownPath.description) Reported separately so its size and path can be reviewed."
                     : target.knownPath.description),
             tags: isSymlink ? [.symlink] : (target.rule.name == "Phantom Application Audit" ? [.old, .unused] : []),
+            isUndeclared: target.isUndeclared,
             isSelected: false
         )
     }
@@ -447,9 +739,9 @@ final class Scanner {
             at: root,
             includingPropertiesForKeys: Array(keys),
             options: [],
-            errorHandler: { [weak self] url, error in
+            errorHandler: { [weak self] _, _ in
                 measurement.complete = false
-                self?.scanNotes.append(.cautionPhase("Could not inspect \(url.path): \(error.localizedDescription)"))
+                self?.unmeasuredFileCount += 1
                 return true
             }
         ) else {

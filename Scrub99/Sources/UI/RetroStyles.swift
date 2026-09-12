@@ -232,60 +232,256 @@ struct RetroProgressView: View {
     let progress: Float
     let label: String
 
+    /// The track's full width. The filled part is a fraction of this, so the two
+    /// numbers have to be the same number.
+    private let trackWidth: CGFloat = 300
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 1, style: .circular)
                     .fill(Color(red: 200/255, green: 200/255, blue: 200/255))
-                    .frame(height: 16)
+                    .frame(width: trackWidth, height: 16)
                     .border(Color(red: 128/255, green: 128/255, blue: 128/255), width: 1)
                 if progress > 0 {
                     RoundedRectangle(cornerRadius: 1, style: .circular)
                         .fill(Color(red: 130/255, green: 170/255, blue: 255/255))
-                        .frame(width: CGFloat(progress) * 100, height: 14)
-                        .offset(x: -2)
+                        .frame(
+                            width: trackWidth * CGFloat(min(max(progress, 0), 1)),
+                            height: 14
+                        )
+                        .padding(.leading, 1)
                 }
             }
-            .frame(width: 300)
+            .frame(width: trackWidth)
         }
     }
 }
 
-struct RetroAlertView: View {
-    let title: String
-    let message: String
-    let icon: AlertIcon
-    let buttons: [AlertButton]
-    @Binding var selectedButton: AlertButton?
+/// Scrub99 has two appearances, not two applications. These tokens are the
+/// whole difference between them: every screen is built once and reads its
+/// colours, fonts, and chrome from here. Keeping the difference this narrow is
+/// what stops one appearance from quietly falling behind the other.
+struct UIStyle {
+    let theme: AppState.Theme
 
-    enum AlertIcon { case info, caution, stop, none }
-    struct AlertButton { let label: String; let isDefault: Bool }
+    var isRetro: Bool { theme == .classic9 }
+
+    let text: Color
+    let secondaryText: Color
+    let accent: Color
+    let border: Color
+    let rowSelection: Color
+    let rowBackground: Color
+    let windowBackground: Color
+    let groupingBackground: Color
+    let positive: Color
+    let caution: Color
+    let negative: Color
+
+    let titleFont: Font
+    let bodyFont: Font
+    let smallFont: Font
+    let labelFont: Font
+    let pathFont: Font
+
+    static func resolve(_ theme: AppState.Theme) -> UIStyle {
+        switch theme {
+        case .classic9:
+            return UIStyle(
+                theme: theme,
+                text: RetroColors.darkText,
+                secondaryText: RetroColors.secondaryText,
+                accent: RetroColors.selectedItem,
+                border: RetroColors.insetBorder,
+                rowSelection: RetroColors.selectionOverlay,
+                rowBackground: RetroColors.panelBackground,
+                windowBackground: RetroColors.windowBackground,
+                groupingBackground: RetroColors.panelBackground,
+                positive: Color(red: 22/255, green: 108/255, blue: 54/255),
+                caution: RetroColors.warningText,
+                negative: RetroColors.criticalText,
+                titleFont: Font.system(size: 22, weight: .bold, design: .monospaced),
+                bodyFont: RetroTypography.bodyFont,
+                smallFont: RetroTypography.smallFont,
+                labelFont: RetroTypography.smallFont.bold(),
+                pathFont: Font.system(size: 11, weight: .regular, design: .monospaced)
+            )
+        case .liquidGlass:
+            return UIStyle(
+                theme: theme,
+                text: Color(nsColor: .labelColor),
+                secondaryText: Color(nsColor: .secondaryLabelColor),
+                accent: Color.accentColor,
+                border: Color(nsColor: .separatorColor),
+                rowSelection: Color.accentColor.opacity(0.14),
+                rowBackground: Color.clear,
+                windowBackground: Color(nsColor: .windowBackgroundColor),
+                groupingBackground: Color(nsColor: .underPageBackgroundColor),
+                positive: Color.green,
+                caution: Color.orange,
+                negative: Color.red,
+                titleFont: .system(size: 26, weight: .semibold),
+                bodyFont: .system(size: 13),
+                smallFont: .system(size: 11),
+                labelFont: .system(size: 11, weight: .semibold),
+                pathFont: .system(size: 11, design: .monospaced)
+            )
+        }
+    }
+}
+
+private struct UIStyleKey: EnvironmentKey {
+    static let defaultValue = UIStyle.resolve(.classic9)
+}
+
+extension EnvironmentValues {
+    var uiStyle: UIStyle {
+        get { self[UIStyleKey.self] }
+        set { self[UIStyleKey.self] = newValue }
+    }
+}
+
+// MARK: - Theme-aware chrome
+
+/// Draws the surface a screen sits on. Retro gets a drawn panel; Liquid Glass
+/// gets a real glass surface on macOS 26 and a material fallback below it.
+private struct ThemePanelChrome: ViewModifier {
+    let isRetro: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isRetro {
+            content
+                .background(RetroColors.panelBackground)
+                .overlay(Rectangle().stroke(RetroColors.insetBorder, lineWidth: 1))
+        } else if #available(macOS 26.0, *) {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+}
+
+struct ThemePanel<Content: View>: View {
+    @Environment(\.uiStyle) private var style
+    private let padding: CGFloat
+    private let content: Content
+
+    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+        self.padding = padding
+        self.content = content()
+    }
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.3).ignoresSafeArea()
-            VStack(spacing: 12) {
-                iconView
-                Text(message).font(RetroTypography.bodyFont).foregroundColor(RetroColors.darkText)
-                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 300)
-                HStack(spacing: 12) {
-                    ForEach(buttons.indices, id: \.self) { i in
-                        RetroButton(label: buttons[i].label, action: { selectedButton = buttons[i] }, isDefault: buttons[i].isDefault)
-                    }
-                }
-            }
-            .padding(20).background(RetroColors.windowBackground)
-            .border(Color.black, width: 1).shadow(color: .black.opacity(0.5), radius: 4, x: 4, y: 4)
+        content
+            .padding(padding)
+            .modifier(ThemePanelChrome(isRetro: style.isRetro))
+    }
+}
+
+struct ThemeButton: View {
+    @Environment(\.uiStyle) private var style
+    let title: String
+    var systemImage: String? = nil
+    var isPrimary: Bool = false
+    var isEnabled: Bool = true
+    var help: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        content
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1 : 0.4)
+            .helpIfPresent(help)
+            // SwiftUI does not derive an accessibility name from a drawn label, so
+            // without this every button in Scrub 99 reaches VoiceOver — and any
+            // script driving the app — as an unnamed "button".
+            .accessibilityLabel(title)
+            .accessibilityHint(help ?? "")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if style.isRetro {
+            RetroButton(label: title, action: action, isDefault: isPrimary)
+        } else if isPrimary {
+            Button(action: action) { label }.buttonStyle(.borderedProminent)
+        } else {
+            Button(action: action) { label }.buttonStyle(.bordered)
         }
     }
 
-    @ViewBuilder private var iconView: some View {
-        switch icon {
-        case .info: Image(systemName: "info.circle.fill").font(.system(size: 36)).foregroundColor(.blue)
-        case .caution: Image(systemName: "exclamation.triangle.fill").font(.system(size: 36)).foregroundColor(.orange)
-        case .stop: Image(systemName: "xmark.circle.fill").font(.system(size: 36)).foregroundColor(.red)
-        case .none: EmptyView()
+    @ViewBuilder
+    private var label: some View {
+        if let systemImage {
+            Label(title, systemImage: systemImage)
+        } else {
+            Text(title)
         }
+    }
+}
+
+struct ThemeCheckbox: View {
+    @Environment(\.uiStyle) private var style
+    let isChecked: Bool
+    var help: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            if style.isRetro {
+                RetroCheckbox(isChecked: isChecked, action: action)
+            } else {
+                Button(action: action) {
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(isChecked ? style.accent : style.secondaryText)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .helpIfPresent(help ?? (isChecked ? "Remove from the cleanup review" : "Add to the cleanup review"))
+        .accessibilityLabel(isChecked ? "Untick" : "Tick for the cleanup review")
+    }
+}
+
+private struct HelpIfPresent: ViewModifier {
+    let text: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let text, !text.isEmpty {
+            content.help(text)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func helpIfPresent(_ text: String?) -> some View {
+        modifier(HelpIfPresent(text: text))
+    }
+}
+
+// MARK: - Button style
+
+struct RetroButtonStyle: ButtonStyle {
+    let isDefault: Bool
+    init(isDefault: Bool = false) { self.isDefault = isDefault }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(RetroTypography.buttonFont)
+            .foregroundColor(RetroColors.darkText)
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .background(ZStack(alignment: .topLeading) {
+                Rectangle().fill(RetroColors.buttonFace).border(isDefault ? RetroColors.darkText : Color(red: 96/255, green: 96/255, blue: 96/255), width: isDefault ? 2 : 1)
+                Rectangle().fill(Color.white).frame(width: 1)
+                Rectangle().fill(Color.white).frame(height: 1).offset(y: -1)
+            })
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
     }
 }

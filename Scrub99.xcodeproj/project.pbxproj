@@ -25,6 +25,10 @@
 		A1000018 /* lmstudio.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000018; };
 		A1000019 /* pipcache.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000019; };
 		A1000020 /* uv.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000020; };
+		A1000031 /* codex.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000031; };
+		A1000032 /* gapcode.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000032; };
+		A1000033 /* gemini.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000033; };
+		A1000034 /* chrome.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000034; };
 		A1000021 /* CleanupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021; };
 		A1000022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022; };
 		A1000023 /* BoundedScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023; };
@@ -33,8 +37,9 @@
 		A1000026 /* CleanupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026; };
 		A1000027 /* ScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027; };
 		A1000028 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A2000028; };
-		A1000029 /* ResultsSorting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029; };
 		A1000030 /* QuarantineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000030; };
+		A1000035 /* ProtectionList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035; };
+		A1000036 /* ProtectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +61,10 @@
 		A2000018 /* lmstudio.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/lmstudio.json; sourceTree = "<group>"; };
 		A2000019 /* pipcache.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/pipcache.json; sourceTree = "<group>"; };
 		A2000020 /* uv.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/uv.json; sourceTree = "<group>"; };
+		A2000031 /* codex.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/codex.json; sourceTree = "<group>"; };
+		A2000032 /* gapcode.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/gapcode.json; sourceTree = "<group>"; };
+		A2000033 /* gemini.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/gemini.json; sourceTree = "<group>"; };
+		A2000034 /* chrome.json */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.json; path = Resources/Rules/chrome.json; sourceTree = "<group>"; };
 		A2000021 /* CleanupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/CleanupView.swift; sourceTree = "<group>"; };
 		A2000022 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/SettingsView.swift; sourceTree = "<group>"; };
 		A2000023 /* BoundedScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Scanner/BoundedScanner.swift; sourceTree = "<group>"; };
@@ -64,8 +73,9 @@
 		A2000026 /* CleanupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Cleanup/CleanupModels.swift; sourceTree = "<group>"; };
 		A2000027 /* ScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Scanner/ScanModels.swift; sourceTree = "<group>"; };
 		A2000028 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = Resources/AppIcon.icns; sourceTree = "<group>"; };
-		A2000029 /* ResultsSorting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/ResultsSorting.swift; sourceTree = "<group>"; };
 		A2000030 /* QuarantineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/QuarantineView.swift; sourceTree = "<group>"; };
+		A2000035 /* ProtectionList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Cleanup/ProtectionList.swift; sourceTree = "<group>"; };
+		A2000036 /* ProtectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/UI/ProtectionView.swift; sourceTree = "<group>"; };
 		A3000001 /* Scrub99.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scrub99.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -111,15 +121,20 @@
 				A2000018,
 				A2000019,
 				A2000020,
+				A2000031,
+				A2000032,
+				A2000033,
+				A2000034,
 				A2000021,
 				A2000022,
 				A2000023,
 				A2000024,
 				A2000025,
 				A2000026,
+				A2000035,
+				A2000036,
 				A2000027,
 				A2000028,
-				A2000029,
 				A2000030,
 			);
 			path = Scrub99;
@@ -196,8 +211,9 @@
 				A1000025,
 				A1000026,
 				A1000027,
-				A1000029,
 				A1000030,
+				A1000035,
+				A1000036,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,6 +229,10 @@
 				A1000018,
 				A1000019,
 				A1000020,
+				A1000031,
+				A1000032,
+				A1000033,
+				A1000034,
 				A1000028,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

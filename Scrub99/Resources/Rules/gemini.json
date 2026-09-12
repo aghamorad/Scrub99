@@ -1,0 +1,57 @@
+{
+  "name": "Gemini / Antigravity",
+  "bundleIdentifier": "com.google.GeminiMacOS",
+  "executableName": "gemini",
+  "knownPaths": [
+    {
+      "relativePath": ".gemini",
+      "category": "applicationData",
+      "description": "Gemini and Antigravity home. Holds per-user model state, CLI configuration, and the Antigravity IDE/CLI data trees. Persistent tool state.",
+      "inventoryDepth": 1
+    },
+    {
+      "relativePath": ".gemini/users",
+      "category": "conversationData",
+      "description": "Per-user Antigravity state. This is the large one; it contains chat and workspace history rather than any single project."
+    },
+    {
+      "relativePath": ".config/gemini",
+      "category": "preferences",
+      "description": "Gemini CLI configuration."
+    },
+    {
+      "relativePath": ".cache/antigravity",
+      "category": "cache",
+      "description": "Antigravity cache. Rebuilt on demand."
+    },
+    {
+      "relativePath": ".cache/gemini",
+      "category": "cache",
+      "description": "Gemini cache. Rebuilt on demand."
+    },
+    {
+      "relativePath": "Library/Application Support/com.google.GeminiMacOS",
+      "category": "applicationData",
+      "description": "Gemini desktop app support data."
+    },
+    {
+      "relativePath": "Library/Caches/com.google.GeminiMacOS",
+      "category": "cache",
+      "description": "Gemini desktop app cache. Rebuilt on demand."
+    }
+  ],
+  "filePatterns": [],
+  "keywords": [
+    "gemini",
+    "antigravity",
+    "com.google.gemini"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch"
+  ],
+  "installMethod": "directDownload",
+  "homepageURL": "https://gemini.google.com/",
+  "category": "ai",
+  "description": "Google Gemini and the Antigravity agent IDE."
+}

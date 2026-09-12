@@ -7,6 +7,7 @@ import Foundation
 /// a Claude cache is both "AI app data" and a "Cache", while an orphaned ordinary
 /// Application Support folder is an "App Leftover" and "Application Data".
 enum FindingKind: String, CaseIterable {
+    case undeclared = "No Rule"
     case aiAppData = "AI App Data"
     case aiLeftover = "AI Leftover"
     case applicationLeftover = "App Leftover"
@@ -14,8 +15,51 @@ enum FindingKind: String, CaseIterable {
     case userProject = "User / Project Data"
     case other = "Other"
 
+    /// SF Symbol for this origin group. Lives here rather than in the views so a
+    /// new group cannot be added without an icon, and so no view has to switch
+    /// over every case just to draw a row.
+    var iconName: String {
+        switch self {
+        case .undeclared: return "folder.badge.questionmark"
+        case .aiAppData: return "sparkles"
+        case .aiLeftover: return "sparkles.rectangle.stack"
+        case .applicationLeftover: return "shippingbox"
+        case .housekeeping: return "wrench.and.screwdriver"
+        case .userProject: return "folder"
+        case .other: return "questionmark.folder"
+        }
+    }
+
+    /// One line that tells a reader who has never seen Scrub99 what this group
+    /// means, in their terms rather than Scrub99's.
+    var tagline: String {
+        switch self {
+        case .undeclared: return "Real folders Scrub99 has no rule for"
+        case .aiAppData: return "Belongs to an AI app you still have installed"
+        case .aiLeftover: return "Belongs to an AI app Scrub99 cannot find installed"
+        case .applicationLeftover: return "Looks like residue from an app that is no longer installed"
+        case .housekeeping: return "Caches, logs, and package-manager leftovers"
+        case .userProject: return "Your own project and workspace data — never ticked for you"
+        case .other: return "Found by a rule, but the origin is not clear"
+        }
+    }
+
+    /// Order the groups by what a reader can act on. Protected user data sorts
+    /// last so it is not the first thing on screen after a scan.
+    static let displayOrder: [FindingKind] = [
+        .undeclared,
+        .aiLeftover,
+        .applicationLeftover,
+        .housekeeping,
+        .aiAppData,
+        .other,
+        .userProject
+    ]
+
     var explanation: String {
         switch self {
+        case .undeclared:
+            return "Scrub99 measured this path while sweeping the folders where undeclared data collects, but no rule in its database describes it. Nothing here is a judgment about whether the contents matter — only that Scrub99 found real, measured storage it has no rule for."
         case .aiAppData:
             return "This path belongs to a known AI application or AI tool that Scrub99 currently detects as installed or active."
         case .aiLeftover:
@@ -44,6 +88,13 @@ class Classifier {
     /// Pure origin classifier used by the UI and tests. Passing rules explicitly keeps
     /// AI-vs-non-AI detection rule-backed instead of hard-coding vendor names.
     static func findingKind(for item: FoundItem, rules: [ApplicationRule]) -> FindingKind {
+        // The sweep's own flag is authoritative. An undeclared path must not be
+        // re-read as a leftover: "no rule describes this" and "the app is gone"
+        // are different claims, and only the first one is supported here.
+        if item.isUndeclared {
+            return .undeclared
+        }
+
         if item.category == .projectData {
             return .userProject
         }

@@ -1,1116 +1,258 @@
-// Scrub99 — ContentView
+// Scrub99 — Main interface
+//
+// This is one interface with two appearances, not two interfaces. Every screen
+// below is built once and reads its colours, fonts, and chrome from `UIStyle`,
+// so no appearance can quietly grow a button — or lose one — that the other
+// does not have. Anything a reader sees is decided here, in one place.
 
-import AppKit
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        Group {
-            switch appState.currentTheme {
-            case .classic9:
-                ClassicContentView()
-            case .liquidGlass:
-                GlassContentView()
+        let style = UIStyle.resolve(appState.currentTheme)
+
+        Screen()
+            .environment(\.uiStyle, style)
+            .background(WindowBackground(isRetro: style.isRetro, color: style.windowBackground))
+            .preferredColorScheme(style.isRetro ? .light : nil)
+            .frame(minWidth: 1040, minHeight: 680)
+            // Each sheet is given the appearance explicitly. A sheet is presented
+            // in its own window, and one attached here — outside the
+            // `.environment(\.uiStyle, …)` call above — does not inherit it: the
+            // content silently falls back to `UIStyleKey.defaultValue`, which is
+            // Classic 9. The effect was a Liquid Glass window opening a retro
+            // sheet, with every colour and font in it hardcoded to Mac OS 9.
+            .sheet(isPresented: $appState.showCleanupConfirmation) {
+                CleanupView()
+                    .environment(\.uiStyle, style)
+                    .environmentObject(appState)
             }
+            .sheet(isPresented: $appState.showGuidedCleanup) {
+                GuidedCleanupView(items: appState.guidedCleanupItems)
+                    .environment(\.uiStyle, style)
+                    .environmentObject(appState)
+            }
+            .sheet(isPresented: $appState.showCleanupPreview) {
+                CleanupPreviewView(items: appState.recommendedCleanupItems)
+                    .environment(\.uiStyle, style)
+                    .environmentObject(appState)
+            }
+            .sheet(isPresented: $appState.showQuarantineManagement) {
+                QuarantineView()
+                    .environment(\.uiStyle, style)
+                    .environmentObject(appState)
+            }
+            .sheet(isPresented: $appState.showProtectionList) {
+                ProtectionView()
+                    .environment(\.uiStyle, style)
+                    .environmentObject(appState)
+            }
+    }
+}
+
+private struct WindowBackground: View {
+    let isRetro: Bool
+    let color: Color
+
+    var body: some View {
+        if isRetro {
+            color
+        } else {
+            LinearGradient(
+                colors: [color, Color.accentColor.opacity(0.12), color],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
         }
     }
 }
 
-struct ClassicContentView: View {
+private struct Screen: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        Group {
-            switch appState.scanState {
-            case .idle: WelcomeView()
-            case .scanning: ScanningView()
-            case .complete: ResultsView()
-            case .error: ErrorView()
+        switch appState.scanState {
+        case .idle: WelcomeScreen()
+        case .scanning: ScanningScreen()
+        case .complete: ResultsScreen()
+        case .error: ErrorScreen()
+        }
+    }
+}
+
+/// Every screen hangs off this so the two appearances differ in exactly one
+/// place: Platinum draws a title bar, Liquid Glass sits on its own background.
+private struct ScreenChrome<Content: View>: View {
+    @Environment(\.uiStyle) private var style
+    let title: String
+    let subtitle: String?
+    private let content: Content
+
+    init(title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if style.isRetro {
+                TitleBarView(title: title, subtitle: subtitle)
+                    .frame(height: 28)
             }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .onAppear { RuleEngine.shared.loadRules() }
-        .sheet(isPresented: $appState.showCleanupConfirmation) {
-            CleanupView()
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.showGuidedCleanup) {
-            GuidedCleanupView(items: appState.guidedCleanupItems)
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.showQuarantineManagement) {
-            QuarantineView()
-                .environmentObject(appState)
-        }
-        // Scrub99 deliberately draws a light Platinum-style surface. Allowing
-        // inherited dark-mode labels produces white text on that light surface.
-        .preferredColorScheme(.light)
     }
 }
 
 // MARK: - Welcome
 
-struct WelcomeView: View {
+private struct WelcomeScreen: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+
+    private let scannedAreas = [
+        "~/Library — application data, caches, logs, preferences, and containers",
+        "Tool caches and hidden folders in your home directory (.cache, .npm, .ollama, .claude and similar)",
+        "Desktop housekeeping files left behind by Office and similar apps",
+        "Your Applications folders, to work out which apps are still installed"
+    ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
-                Text("Scrub 99")
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
-                    .foregroundColor(RetroColors.darkText)
-                Text("Find leftovers from apps you no longer use.")
-                    .font(RetroTypography.bodyFont)
-                    .foregroundColor(RetroColors.darkText)
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 8)
-                RetroButton(label: "Scan My Mac", action: appState.startScan)
-                Text("Version 0.3.0")
-                    .font(RetroTypography.smallFont)
-                    .foregroundColor(RetroColors.secondaryText)
-                    .padding(.top, 24)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            HStack {
-                Spacer()
-                Text("Scrub 99 will examine ~/Library, caches, and hidden folders.")
-                    .font(RetroTypography.smallFont)
-                    .foregroundColor(RetroColors.secondaryText)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 300)
-                Spacer()
-            }
-            .padding(12)
-        }
-        .frame(minWidth: 500, minHeight: 350)
-        .background(RetroColors.windowBackground)
-    }
-
-}
-
-// MARK: - Scanning
-
-struct ScanningView: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "hourglass")
-                .font(.system(size: 32))
-                .foregroundColor(RetroColors.darkText)
-                .rotationEffect(.degrees(Double(appState.scanProgress.progressValue) * 360))
-                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: Date())
-            Text(appState.scanProgress.title)
-                .font(RetroTypography.bodyFont)
-                .foregroundColor(RetroColors.darkText)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
-            RetroProgressView(progress: appState.scanProgress.progressValue, label: "")
-            RetroButton(label: "Cancel", action: appState.cancelScan)
-                .padding(.top, 8)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
-    }
-}
-
-// MARK: - Results
-
-struct ResultsView: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var searchText = ""
-    @State private var showAuditExplanation = true
-    @State private var sortField: ResultsSortField = .item
-    @State private var sortAscending = true
-
-    private func filteredItems(_ items: [FoundItem]) -> [FoundItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return items }
-        return items.filter { item in
-            item.path.path.localizedCaseInsensitiveContains(query) ||
-            item.category.displayName.localizedCaseInsensitiveContains(query) ||
-            item.findingKind.rawValue.localizedCaseInsensitiveContains(query) ||
-            (item.primaryApplication?.name.localizedCaseInsensitiveContains(query) ?? false)
-        }
-    }
-
-    var body: some View {
-        if let results = appState.scanResults {
-            VStack(spacing: 0) {
-                SummaryBar(results: results)
-                    .padding(8)
-                DisclosureGroup("What these findings mean", isExpanded: $showAuditExplanation) {
-                    Text("Scrub99 lists paths because they match an explicit application rule or protected workspace root. A listing is evidence of disk use, not a declaration that the item is junk. Whether it is necessary depends on whether you still use the related app, model, history, or project. Select a row to read the item-specific explanation and risk before ticking it.")
-                        .font(RetroTypography.smallFont)
-                        .foregroundColor(RetroColors.darkText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 4)
+        ScreenChrome(title: "Scrub 99", subtitle: "Safety-first cleanup") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    masthead
+                    ThemePanel { scanControls }
+                    ThemePanel { scope }
+                    footer
                 }
-                .font(RetroTypography.smallFont.bold())
-                .foregroundColor(RetroColors.darkText)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                    TextField("Filter by name, full path, app, finding type, or category", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
-                    if !searchText.isEmpty {
-                        Button("Clear") { searchText = "" }
-                            .buttonStyle(RetroButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
-                Divider().background(RetroColors.insetBorder).padding(.horizontal, 8)
-                HSplitView {
-                    ScrollView {
-                        ResultsTreeView(
-                            items: filteredItems(results.foundItems),
-                            sortField: $sortField,
-                            sortAscending: $sortAscending
-                        )
-                            .padding(8)
-                    }
-                    .frame(minWidth: 780, idealWidth: 840)
-
-                    ResultDetailsPane(item: appState.inspectedItem)
-                        .frame(minWidth: 340, idealWidth: 400, maxWidth: 520, maxHeight: .infinity)
-                }
-                ActionBar()
-                    .padding(8)
-            }
-            .frame(minWidth: 1140, minHeight: 650)
-            .background(RetroColors.windowBackground)
-        } else {
-            WelcomeView()
-        }
-    }
-}
-
-struct SummaryBar: View {
-    let results: ScanResults
-    @EnvironmentObject private var appState: AppState
-
-    var selectedSize: Int64 {
-        appState.scanResults?.foundItems.filter { $0.isSelected }.reduce(0) { $0 + $1.size } ?? 0
-    }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text("Found \(results.foundItems.count) reviewable items").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            Spacer()
-            Text("Selected: \(selectedSize.humanReadable)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            let aiLeftovers = results.foundItems.filter { $0.findingKind == .aiLeftover }.count
-            let appLeftovers = results.foundItems.filter { $0.findingKind == .applicationLeftover }.count
-            if aiLeftovers > 0 {
-                Text("AI leftovers: \(aiLeftovers)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            }
-            if appLeftovers > 0 {
-                Text("App leftovers: \(appLeftovers)").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            }
-            Text("Measured \(results.scannedPaths.count) paths").font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-        }
-        .padding(.horizontal, 4)
-    }
-}
-
-// MARK: - Results Tree
-
-struct ResultsTreeView: View {
-    let items: [FoundItem]
-    @Binding var sortField: ResultsSortField
-    @Binding var sortAscending: Bool
-
-    private func changeSort(to field: ResultsSortField) {
-        if sortField == field {
-            sortAscending.toggle()
-        } else {
-            sortField = field
-            sortAscending = field != .size
-        }
-    }
-
-    var body: some View {
-        let appGroups = Dictionary(grouping: items) { item in
-            item.primaryApplication?.name ?? "Unclassified"
-        }
-        let orderedGroupNames = ResultsSorter.groupNames(appGroups, by: sortField, ascending: sortAscending)
-
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 8) {
-                SortHeader(label: "Item", field: .item, activeField: sortField, ascending: sortAscending, alignment: .leading) {
-                    changeSort(to: .item)
-                }
-                .frame(width: 280, alignment: .leading)
-                SortHeader(label: "Category", field: .category, activeField: sortField, ascending: sortAscending, alignment: .leading) {
-                    changeSort(to: .category)
-                }
-                .frame(width: 150, alignment: .leading)
-                SortHeader(label: "Size", field: .size, activeField: sortField, ascending: sortAscending, alignment: .trailing) {
-                    changeSort(to: .size)
-                }
-                .frame(width: 90, alignment: .trailing)
-                SortHeader(label: "Type / status / safety", field: .status, activeField: sortField, ascending: sortAscending, alignment: .leading) {
-                    changeSort(to: .status)
-                }
-                .frame(width: 210, alignment: .leading)
-            }
-            .padding(.vertical, 5)
-            .border(RetroColors.insetBorder, width: 1)
-
-            Divider().background(RetroColors.insetBorder).padding(.vertical, 2)
-
-            // Groups
-            ForEach(orderedGroupNames, id: \.self) { appName in
-                let orderedItems = ResultsSorter.items(appGroups[appName] ?? [], by: sortField, ascending: sortAscending)
-                AppGroupSection(name: appName, items: orderedItems, isRemnant: appGroups[appName]?.first?.primaryApplication?.isInstalled == false)
-                Divider().background(RetroColors.insetBorder)
+                .frame(maxWidth: 700)
+                .frame(maxWidth: .infinity)
+                .padding(24)
             }
         }
     }
-}
 
-private struct SortHeader: View {
-    let label: String
-    let field: ResultsSortField
-    let activeField: ResultsSortField
-    let ascending: Bool
-    let alignment: Alignment
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(label)
-                if activeField == field {
-                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-            }
-            .font(RetroTypography.smallFont.bold())
-            .foregroundColor(RetroColors.darkText)
-            .frame(maxWidth: .infinity, alignment: alignment)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(activeField == field ? "Sorted \(ascending ? "ascending" : "descending"). Click to reverse." : "Sort by \(label).")
-        .accessibilityLabel(activeField == field ? "Sort by \(label), currently \(ascending ? "ascending" : "descending")" : "Sort by \(label)")
-    }
-}
-
-struct AppGroupSection: View {
-    let name: String
-    let items: [FoundItem]
-    let isRemnant: Bool
-    @State private var isExpanded = true
-
-    var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
-    var selectedSize: Int64 { items.filter { $0.isSelected }.reduce(0) { $0 + $1.size } }
-    var containsProtectedWorkspace: Bool { items.contains { $0.category == .projectData } }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    RetroDisclosureTriangle(isExpanded: isExpanded)
-                        .onTapGesture { withAnimation { isExpanded.toggle() } }
-                    Text(containsProtectedWorkspace ? "📁 \(name)" : (isRemnant ? "🔍 \(name)" : name))
-                        .font(RetroTypography.smallFont).bold()
-                        .foregroundColor(RetroColors.darkText)
-                }
-                .frame(width: 280, alignment: .leading)
-                Text(items.count > 1 ? "\(items.count) items" : items.first?.category.displayName ?? "")
-                    .font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText).frame(width: 150, alignment: .leading)
-                Text(totalSize.humanReadable).font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText).frame(width: 90, alignment: .trailing)
-                Text(containsProtectedWorkspace
-                    ? "User / Project Data · Protected workspace"
-                    : "\(items.first?.findingKind.rawValue ?? "Other") · " + (isRemnant ? "App removed" : "\(selectedSize.humanReadable) selected"))
-                    .font(RetroTypography.smallFont)
-                    .foregroundColor(RetroColors.darkText)
-                    .frame(width: 210, alignment: .leading)
-            }
-            .padding(.vertical, 5)
-            .background(isExpanded ? RetroColors.panelBackground : RetroColors.windowBackground)
-
-            if isExpanded {
-                ForEach(items) { item in
-                    ResultRow(item: item)
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-struct ResultRow: View {
-    let item: FoundItem
-    @EnvironmentObject private var appState: AppState
-
-    private var assessment: CleanupSafetyPolicy.Assessment {
-        appState.cleanupAssessment(for: item)
-    }
-
-    private var isInspected: Bool {
-        appState.inspectedItemID == item.id
-    }
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            Button {
-                appState.inspectItem(item.id)
-            } label: {
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        if assessment.canBeSelected || item.isSelected {
-                            Color.clear.frame(width: 22, height: 22)
-                        } else {
-                            Text("–")
-                                .font(RetroTypography.smallFont)
-                                .foregroundColor(RetroColors.darkText)
-                                .frame(width: 22)
-                        }
-                        Text(item.path.lastPathComponent)
-                            .font(RetroTypography.smallFont)
-                            .foregroundColor(RetroColors.darkText)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(width: 280, alignment: .leading)
-
-                    Text(item.category.displayName)
-                        .font(RetroTypography.smallFont)
-                        .foregroundColor(RetroColors.darkText)
-                        .lineLimit(1)
-                        .frame(width: 150, alignment: .leading)
-
-                    Text(item.size.humanReadable)
-                        .font(RetroTypography.smallFont)
-                        .foregroundColor(RetroColors.darkText)
-                        .frame(width: 90, alignment: .trailing)
-
-                    Text("\(item.findingKind.rawValue) · \(item.association.rawValue) · \(item.safetyLevel.rawValue)")
-                        .font(RetroTypography.smallFont)
-                        .foregroundColor(RetroColors.darkText)
-                        .lineLimit(2)
-                        .frame(width: 210, alignment: .leading)
-                }
-                .padding(.vertical, 5)
-                .padding(.horizontal, 3)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Click anywhere on this row to view details for \(item.path.path)")
-            .accessibilityLabel("Inspect \(item.path.lastPathComponent), \(item.category.displayName), \(item.size.humanReadable), \(item.association.rawValue), \(item.safetyLevel.rawValue)")
-
-            if assessment.canBeSelected || item.isSelected {
-                RetroCheckbox(isChecked: item.isSelected) {
-                    appState.toggleSelection(for: item.id)
-                }
-                .padding(.leading, 3)
-                .help(assessment.reason)
-                .accessibilityLabel(item.isSelected ? "Untick \(item.path.lastPathComponent)" : "Tick \(item.path.lastPathComponent)")
-            }
-        }
-        .background(isInspected ? RetroColors.selectionOverlay : Color.clear)
-        .overlay(alignment: .leading) {
-            if isInspected {
-                Rectangle().fill(RetroColors.selectedItem).frame(width: 4)
-            }
-        }
-    }
-}
-
-struct ResultDetailsPane: View {
-    let item: FoundItem?
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        ScrollView {
-            if let item {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(item.path.lastPathComponent)
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(RetroColors.darkText)
-
-                    detailBlock("Full path", item.path.path)
-                    detailBlock("Measured size", item.size.humanReadable)
-                    detailBlock("Finding type", item.findingKind.rawValue)
-                    detailBlock("Why this type", item.findingKind.explanation)
-                    detailBlock("Category", item.category.displayName)
-                    detailBlock("Associated with", item.primaryApplication?.name ?? "Unknown")
-                    detailBlock("Association", item.association.rawValue)
-                    detailBlock("Safety", "\(item.safetyLevel.icon) \(item.safetyLevel.rawValue)")
-
-                    if let modified = item.modified {
-                        detailBlock("Modified", modified.formatted(date: .abbreviated, time: .shortened))
-                    }
-                    if let reason = item.reason { detailBlock("Why it was listed", reason) }
-                    if let explanation = item.explanation { detailBlock("What it contains", explanation) }
-
-                    Divider().background(RetroColors.insetBorder)
-                    Text("Plain-language assessment")
-                        .font(RetroTypography.bodyFont.bold())
-                        .foregroundColor(RetroColors.darkText)
-
-                    let guide = item.readerGuide
-                    detailBlock("What this is", guide.whatItIs)
-                    detailBlock("Why it is here", guide.whyItExists)
-                    detailBlock("Is it necessary?", guide.necessity)
-                    detailBlock("Risk if quarantined", "\(guide.risk.rawValue). \(guide.riskExplanation)")
-
-                    Text("This assessment is rule-based evidence, not proof. Scrub99 cannot know whether you have another complete copy or still depend on this exact path.")
-                        .font(RetroTypography.smallFont)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    let assessment = appState.cleanupAssessment(for: item)
-                    detailBlock("Cleanup status", assessment.reason)
-
-                    HStack {
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([item.path])
-                        }
-                        .buttonStyle(RetroButtonStyle())
-
-                        if assessment.canBeSelected || item.isSelected {
-                            Button(item.isSelected ? "Untick" : (assessment.requiresProtectedConfirmation ? "Tick for Protected Review" : "Tick for Quarantine")) {
-                                appState.toggleSelection(for: item.id)
-                            }
-                            .buttonStyle(RetroButtonStyle(isDefault: !item.isSelected))
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 30))
-                    Text("Select any listed path to inspect it.")
-                        .font(RetroTypography.bodyFont)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, minHeight: 240)
-            }
-        }
-        .padding(16)
-        .background(RetroColors.panelBackground)
-    }
-
-    private func detailBlock(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(RetroTypography.smallFont.bold())
-                .foregroundColor(RetroColors.darkText)
-            Text(value)
-                .font(RetroTypography.smallFont)
-                .foregroundColor(RetroColors.darkText)
-                .textSelection(.enabled)
+    private var masthead: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(style.accent)
+            Text("Scrub 99")
+                .font(style.titleFont)
+                .foregroundStyle(style.text)
+            Text("Finds the storage your Mac is holding on to, explains what each thing actually is, and moves nothing until you say so.")
+                .font(style.bodyFont)
+                .foregroundStyle(style.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-}
 
-// MARK: - Action Bar
-
-struct ActionBar: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var feedbackMessage = ""
-    @State private var showFeedback = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button("Clean Up Unnecessary Stuff…") {
-                if appState.recommendedCleanupItems.isEmpty {
-                    showMessage("No low-risk cache or log candidates are currently available for guided cleanup.")
-                } else {
-                    appState.beginGuidedCleanup()
-                }
-            }
-            .buttonStyle(RetroButtonStyle())
-            .help(guidedCleanupHelp)
-            Spacer()
-            Text("Ticked: \(appState.activeCleanupItems.count) · \(appState.activeCleanupItems.reduce(0) { $0 + $1.size }.humanReadable)")
-                .font(RetroTypography.smallFont).foregroundColor(RetroColors.darkText)
-            Button("Manage Quarantine") {
-                if appState.hasQuarantineItems {
-                    appState.showQuarantineManagement = true
-                } else {
-                    showMessage("Scrub99 Quarantine is currently empty.")
-                }
-            }
-            .buttonStyle(RetroButtonStyle(isDefault: true))
-            Button("View Selected") {
-                let item = appState.activeCleanupItems.first ?? appState.scanResults?.foundItems.first
-                if let item { appState.inspectItem(item.id) }
-            }
-            .buttonStyle(RetroButtonStyle())
-            Button("Review Quarantine") {
-                if appState.activeCleanupItems.isEmpty {
-                    showMessage("Tick at least one reviewable item before opening the quarantine review.")
-                } else {
-                    appState.showCleanupConfirmation = true
-                }
-            }
-            .buttonStyle(RetroButtonStyle(isDefault: true))
-            .keyboardShortcut(.return)
-        }
-        .alert("Scrub 99", isPresented: $showFeedback) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(feedbackMessage)
-        }
-    }
-
-    private func showMessage(_ message: String) {
-        feedbackMessage = message
-        showFeedback = true
-    }
-
-    private var guidedCleanupHelp: String {
-        let items = appState.recommendedCleanupItems
-        let size = items.reduce(0) { $0 + $1.size }
-        if items.isEmpty {
-            return "No rule-backed, low-risk cache or log candidates were found."
-        }
-        return "Review \(items.count) low-risk cache or log path(s), one at a time, totaling \(size.humanReadable)."
-    }
-}
-
-struct RetroButtonStyle: ButtonStyle {
-    let isDefault: Bool
-    init(isDefault: Bool = false) { self.isDefault = isDefault }
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(RetroTypography.buttonFont)
-            .foregroundColor(RetroColors.darkText)
-            .padding(.horizontal, 14).padding(.vertical, 7)
-            .background(ZStack(alignment: .topLeading) {
-                Rectangle().fill(RetroColors.buttonFace).border(isDefault ? RetroColors.darkText : Color(red: 96/255, green: 96/255, blue: 96/255), width: isDefault ? 2 : 1)
-                Rectangle().fill(Color.white).frame(width: 1)
-                Rectangle().fill(Color.white).frame(height: 1).offset(y: -1)
-            })
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-    }
-}
-
-// MARK: - Error View
-
-struct ErrorView: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "xmark.circle")
-                .font(.system(size: 48))
-                .foregroundColor(.red)
-            Text("Scan Failed")
-                .font(.title2)
-                .bold()
-            Text("Something went wrong during the scan.")
-                .font(RetroTypography.bodyFont)
-                .foregroundColor(RetroColors.darkText)
-            Button("Try Again", action: {
-                appState.scanState = .idle
-                appState.scanResults = nil
-            })
-            .buttonStyle(RetroButtonStyle(isDefault: true))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
-    }
-}
-
-
-// MARK: - Liquid Glass Theme
-
-struct GlassContentView: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        Group {
-            switch appState.scanState {
-            case .idle:
-                GlassWelcomeView()
-            case .scanning:
-                GlassScanningView()
-            case .complete:
-                GlassResultsView()
-            case .error:
-                GlassErrorView()
-            }
-        }
-        .sheet(isPresented: $appState.showCleanupConfirmation) {
-            CleanupView()
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.showGuidedCleanup) {
-            GuidedCleanupView(items: appState.guidedCleanupItems)
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.showQuarantineManagement) {
-            QuarantineView()
-                .environmentObject(appState)
-        }
-        .frame(minWidth: 980, minHeight: 640)
-        .background(GlassBackdrop())
-    }
-}
-
-private struct GlassBackdrop: View {
-    var body: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            RadialGradient(
-                colors: [
-                    Color.accentColor.opacity(0.13),
-                    Color.clear
-                ],
-                center: .topLeading,
-                startRadius: 20,
-                endRadius: 780
-            )
-        }
-        .ignoresSafeArea()
-    }
-}
-
-private struct GlassWelcomeView: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var message = ""
-    @State private var showMessage = false
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            VStack(spacing: 10) {
-                Image(systemName: "sparkles.rectangle.stack")
-                    .font(.system(size: 46, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-
-                Text("Scrub 99")
-                    .font(.system(size: 34, weight: .semibold))
-
-                Text("Find AI leftovers, ordinary app leftovers, caches, models, and protected project data without mixing them together.")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 620)
-            }
-
-            VStack(spacing: 12) {
-                Button {
+    private var scanControls: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                ThemeButton(
+                    title: "Scan My Mac",
+                    systemImage: "magnifyingglass",
+                    isPrimary: true,
+                    help: appState.deepSweep
+                        ? "Measure the storage locations Scrub 99 knows about, and also sweep the folders where undeclared data collects. The result is a list you can read and sort — nothing is ticked, moved, or changed by a scan, and you can stop it partway."
+                        : "Measure the storage locations Scrub 99 knows about. The result is a list you can read and sort — nothing is ticked, moved, or changed by a scan, and you can stop it partway."
+                ) {
                     appState.startScan()
-                } label: {
-                    Label("Scan My Mac", systemImage: "magnifyingglass")
-                        .frame(minWidth: 180)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.return, modifiers: [])
+                .keyboardShortcut(.defaultAction)
 
-                Button {
-                    if appState.hasQuarantineItems {
-                        appState.showQuarantineManagement = true
-                    } else {
-                        message = "Scrub99 Quarantine is currently empty."
-                        showMessage = true
-                    }
-                } label: {
-                    Label("Manage Quarantine", systemImage: "archivebox")
-                }
-                .buttonStyle(.bordered)
-            }
-
-            GlassThemeChooser()
-
-            Spacer()
-
-            Text("Nothing is deleted automatically. Scrub99 inventories first, explains what it found, and uses reversible quarantine.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 600)
-        }
-        .padding(40)
-        .scrubGlassPanel()
-        .padding(34)
-        .alert("Scrub 99", isPresented: $showMessage) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(message)
-        }
-    }
-}
-
-private struct GlassScanningView: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        VStack(spacing: 18) {
-            ProgressView()
-                .controlSize(.large)
-
-            Text(appState.scanProgress.title)
-                .font(.title3.weight(.medium))
-                .multilineTextAlignment(.center)
-
-            ProgressView(value: Double(appState.scanProgress.progressValue), total: 1)
-                .frame(maxWidth: 420)
-
-            Button("Cancel Scan") {
-                appState.cancelScan()
-            }
-            .buttonStyle(.bordered)
-            .keyboardShortcut(".", modifiers: .command)
-        }
-        .padding(36)
-        .frame(maxWidth: 560)
-        .scrubGlassPanel()
-        .padding()
-    }
-}
-
-private struct GlassResultsView: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var searchText = ""
-
-    private var filteredItems: [FoundItem] {
-        let items = appState.scanResults?.foundItems ?? []
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return items }
-
-        return items.filter { item in
-            item.path.path.localizedCaseInsensitiveContains(query) ||
-            item.category.displayName.localizedCaseInsensitiveContains(query) ||
-            item.findingKind.rawValue.localizedCaseInsensitiveContains(query) ||
-            (item.primaryApplication?.name.localizedCaseInsensitiveContains(query) ?? false)
-        }
-    }
-
-    var body: some View {
-        NavigationSplitView {
-            GlassSidebar(items: filteredItems)
-                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 430)
-        } detail: {
-            VStack(spacing: 0) {
-                if let item = appState.inspectedItem {
-                    GlassResultDetails(item: item)
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 36))
-                        Text("Choose a Finding")
-                            .font(.title2.weight(.semibold))
-                        Text("Select an item on the left to see exactly what it is, why Scrub99 found it, and whether it can be quarantined.")
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 440)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Always open, even when empty. An empty Quarantine is exactly the
+                // moment someone wants to know where it is, and refusing to show
+                // them the folder answers the question with silence.
+                ThemeButton(
+                    title: "Quarantine…",
+                    help: appState.hasQuarantineItems
+                        ? "Open Scrub 99's Quarantine, where everything you have cleaned waits until you decide."
+                        : "Quarantine is empty, which is a good time to see where it is: a normal folder at \(CleanupEngine().quarantineURL.path). Anything you clean lands there and can be put back."
+                ) {
+                    appState.showQuarantineManagement = true
                 }
 
-                Divider()
-                GlassActionBar()
-                    .padding(14)
-            }
-        }
-        .searchable(text: $searchText, prompt: "Search apps, paths, finding types, or categories")
-    }
-}
-
-private struct GlassSidebar: View {
-    let items: [FoundItem]
-
-    var body: some View {
-        List {
-            ForEach(FindingKind.allCases, id: \.self) { kind in
-                let group = items
-                    .filter { $0.findingKind == kind }
-                    .sorted { $0.size > $1.size }
-
-                if !group.isEmpty {
-                    Section {
-                        ForEach(group) { item in
-                            GlassFindingRow(item: item)
-                        }
-                    } header: {
-                        HStack {
-                            Text(kind.rawValue)
-                            Spacer()
-                            Text(group.reduce(0) { $0 + $1.size }.humanReadable)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                // The counterpart, and the one thing on this screen that is about
+                // Scrub 99 holding back rather than acting. Worth showing before a
+                // first scan: it is the answer to "what if it offers me something
+                // I actually want?"
+                ThemeButton(
+                    title: appState.protectionEntries.isEmpty
+                        ? "Left Alone"
+                        : "Left Alone (\(appState.protectionEntries.count))",
+                    help: "The paths you have told Scrub 99 to stop offering. Empty for now — open any finding after a scan and you can put it on this list."
+                ) {
+                    appState.showProtectionList = true
                 }
             }
-        }
-        .listStyle(.sidebar)
-    }
-}
 
-private struct GlassFindingRow: View {
-    let item: FoundItem
-    @EnvironmentObject private var appState: AppState
+            Divider()
 
-    private var assessment: CleanupSafetyPolicy.Assessment {
-        appState.cleanupAssessment(for: item)
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                appState.inspectItem(item.id)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: iconName)
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.path.lastPathComponent)
-                            .lineLimit(1)
-
-                        HStack(spacing: 6) {
-                            Text(item.category.displayName)
-                            Text("·")
-                            Text(item.size.humanReadable)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 4)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if assessment.canBeSelected || item.isSelected {
-                Button {
-                    appState.toggleSelection(for: item.id)
-                } label: {
-                    Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 15, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .help(item.isSelected ? "Remove from quarantine review" : "Add to quarantine review")
-            }
-        }
-        .padding(.vertical, 4)
-        .background(
-            appState.inspectedItemID == item.id
-                ? Color.accentColor.opacity(0.11)
-                : Color.clear,
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
-    }
-
-    private var iconName: String {
-        switch item.findingKind {
-        case .aiAppData: return "sparkles"
-        case .aiLeftover: return "sparkles.rectangle.stack"
-        case .applicationLeftover: return "shippingbox"
-        case .housekeeping: return "wrench.and.screwdriver"
-        case .userProject: return "folder"
-        case .other: return "questionmark.folder"
-        }
-    }
-}
-
-private struct GlassResultDetails: View {
-    let item: FoundItem
-    @EnvironmentObject private var appState: AppState
-    @State private var message = ""
-    @State private var showMessage = false
-
-    private var assessment: CleanupSafetyPolicy.Assessment {
-        appState.cleanupAssessment(for: item)
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: detailIcon)
-                        .font(.system(size: 28, weight: .medium))
-                        .frame(width: 42, height: 42)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.path.lastPathComponent)
-                            .font(.title2.weight(.semibold))
-                        Text(item.findingKind.rawValue)
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Text(item.size.humanReadable)
-                        .font(.title3.monospacedDigit())
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    GlassDetailLine(label: "Application", value: item.primaryApplication?.name ?? "Unknown")
-                    GlassDetailLine(label: "Storage category", value: item.category.displayName)
-                    GlassDetailLine(label: "Ownership confidence", value: item.association.rawValue)
-                    GlassDetailLine(label: "Safety", value: item.safetyLevel.rawValue)
-                    GlassDetailLine(label: "Full path", value: item.path.path)
-                }
-                .padding(18)
-                .scrubGlassPanel()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("What Scrub99 thinks")
-                        .font(.headline)
-
-                    Text(item.findingKind.explanation)
-                        .foregroundStyle(.secondary)
-
-                    let guide = item.readerGuide
-                    GlassDetailLine(label: "What this is", value: guide.whatItIs)
-                    GlassDetailLine(label: "Why it exists", value: guide.whyItExists)
-                    GlassDetailLine(label: "Is it necessary?", value: guide.necessity)
-                    GlassDetailLine(label: "Risk if quarantined", value: "\(guide.risk.rawValue). \(guide.riskExplanation)")
-                }
-                .padding(18)
-                .scrubGlassPanel()
-
-                HStack(spacing: 10) {
-                    Button {
-                        NSWorkspace.shared.activateFileViewerSelecting([item.path])
-                    } label: {
-                        Label("Reveal in Finder", systemImage: "folder")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        if assessment.canBeSelected || item.isSelected {
-                            appState.toggleSelection(for: item.id)
-                        } else {
-                            message = assessment.reason
-                            showMessage = true
-                        }
-                    } label: {
-                        Label(
-                            item.isSelected ? "Remove from Review" : "Add to Quarantine Review",
-                            systemImage: item.isSelected ? "minus.circle" : "plus.circle"
-                        )
-                    }
-                    .buttonStyle(.borderedProminent)
+            Toggle(isOn: Binding(
+                get: { appState.deepSweep },
+                set: { appState.setDeepSweep($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Also measure folders Scrub 99 has no rule for")
+                        .font(style.bodyFont)
+                        .foregroundStyle(style.text)
+                    Text("This is usually where the big wins hide, because nothing else reports them. It adds up to a minute to the scan. Those findings are shown for information and can only be cleaned after an extra typed confirmation.")
+                        .font(style.smallFont)
+                        .foregroundStyle(style.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 780, alignment: .leading)
-        }
-        .alert("Scrub 99", isPresented: $showMessage) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(message)
+            .toggleStyle(.checkbox)
         }
     }
 
-    private var detailIcon: String {
-        switch item.findingKind {
-        case .aiAppData: return "sparkles"
-        case .aiLeftover: return "sparkles.rectangle.stack"
-        case .applicationLeftover: return "shippingbox"
-        case .housekeeping: return "wrench.and.screwdriver"
-        case .userProject: return "folder"
-        case .other: return "questionmark.folder"
-        }
-    }
-}
+    private var scope: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("WHAT SCRUB 99 WILL LOOK AT")
+                .font(style.labelFont)
+                .foregroundStyle(style.secondaryText)
 
-private struct GlassDetailLine: View {
-    let label: String
-    let value: String
+            ForEach(scannedAreas, id: \.self) { area in
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•").font(style.bodyFont).foregroundStyle(style.secondaryText)
+                    Text(area)
+                        .font(style.bodyFont)
+                        .foregroundStyle(style.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .textSelection(.enabled)
+            Text("Scanning only measures. Nothing is moved, changed, or deleted until you tick it and confirm.")
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+                .padding(.top, 2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-}
 
-private struct GlassActionBar: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var message = ""
-    @State private var showMessage = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                appState.startScan()
-            } label: {
-                Label("Scan Again", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-                if appState.recommendedCleanupItems.isEmpty {
-                    tell("No low-risk cache or log candidates are currently available for guided cleanup.")
-                } else {
-                    appState.beginGuidedCleanup()
-                }
-            } label: {
-                Label("Guided Cleanup", systemImage: "wand.and.stars")
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-                if appState.hasQuarantineItems {
-                    appState.showQuarantineManagement = true
-                } else {
-                    tell("Scrub99 Quarantine is currently empty.")
-                }
-            } label: {
-                Label("Quarantine", systemImage: "archivebox")
-            }
-            .buttonStyle(.bordered)
-
+    private var footer: some View {
+        HStack(alignment: .center) {
+            Text("Version 0.4.0")
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
             Spacer()
-
-            Text("\(appState.activeCleanupItems.count) selected · \(appState.totalReclaimable.humanReadable)")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Button {
-                if appState.activeCleanupItems.isEmpty {
-                    tell("Select at least one reviewable item first. Scrub99 will never infer destructive intent from merely inspecting a row.")
-                } else {
-                    appState.showCleanupConfirmation = true
-                }
-            } label: {
-                Label("Review Selected", systemImage: "checklist")
-            }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.return, modifiers: .command)
+            ThemeChooser()
         }
-        .alert("Scrub 99", isPresented: $showMessage) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(message)
-        }
-    }
-
-    private func tell(_ text: String) {
-        message = text
-        showMessage = true
     }
 }
 
-private struct GlassThemeChooser: View {
+private struct ThemeChooser: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
 
     var body: some View {
         Picker("Appearance", selection: Binding(
@@ -1122,66 +264,875 @@ private struct GlassThemeChooser: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 260)
+        .labelsHidden()
+        .frame(width: 220)
+        .helpIfPresent("Classic 9 is the Mac OS 9 look. Glass is the modern one. Everything else in Scrub 99 is identical either way.")
     }
 }
 
-private struct GlassErrorView: View {
+// MARK: - Scanning
+
+private struct ScanningScreen: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+
+    private var currentPath: String? {
+        if case .pathProgress(let path, _, _) = appState.scanProgress { return path }
+        return nil
+    }
+
+    private var progress: Float { appState.scanProgress.progressValue }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 38))
+        ScreenChrome(title: "Scrub 99", subtitle: "Scanning") {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Measuring your Mac")
+                    .font(style.titleFont)
+                    .foregroundStyle(style.text)
+                Text("Scrub 99 is only reading sizes and dates. Nothing is being changed.")
+                    .font(style.bodyFont)
+                    .foregroundStyle(style.secondaryText)
 
-            Text("Scan Failed")
-                .font(.title2.weight(.semibold))
-
-            Text(appState.lastErrorMessage ?? "Scrub99 could not complete the scan.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 480)
-
-            HStack {
-                Button("Back") {
-                    appState.scanState = .idle
-                    appState.scanResults = nil
+                if style.isRetro {
+                    RetroProgressView(progress: progress, label: appState.scanProgress.title)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: Double(progress))
+                        Text(appState.scanProgress.title)
+                            .font(style.smallFont)
+                            .foregroundStyle(style.secondaryText)
+                    }
                 }
-                .buttonStyle(.bordered)
 
-                Button("Try Again") {
-                    appState.startScan()
+                if let currentPath {
+                    Text(currentPath)
+                        .font(style.pathFont)
+                        .foregroundStyle(style.secondaryText)
+                        .lineLimit(2)
+                        .truncationMode(.head)
+                        .textSelection(.enabled)
                 }
-                .buttonStyle(.borderedProminent)
+
+                Spacer()
+
+                HStack {
+                    ThemeButton(title: "Cancel", isEnabled: true, help: "Stop the scan. Nothing has been changed, so there is nothing to undo.") {
+                        appState.cancelScan()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+// MARK: - Results
+
+private struct FindingGroup: Identifiable {
+    let kind: FindingKind
+    let items: [FoundItem]
+    var id: FindingKind { kind }
+}
+
+private struct ResultsScreen: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+
+    @State private var query = ""
+    @State private var showReadingGuide = false
+    @State private var showAllNotes = false
+
+    /// Three notes fit beside the findings without crowding them. Anything past
+    /// that folds away, so a scan that produces a dozen of them can never push the
+    /// list, the detail pane, and the action bar off the bottom of the window.
+    private static let inlineNoteLimit = 3
+
+    private var allItems: [FoundItem] { appState.scanResults?.foundItems ?? [] }
+
+    private var visibleItems: [FoundItem] {
+        guard !query.isEmpty else { return allItems }
+        let needle = query.lowercased()
+        return allItems.filter { item in
+            item.path.path.lowercased().contains(needle)
+                || (item.primaryApplication?.name.lowercased().contains(needle) ?? false)
+        }
+    }
+
+    private var groups: [FindingGroup] {
+        FindingKind.displayOrder.compactMap { kind in
+            let matching = visibleItems
+                .filter { $0.findingKind == kind }
+                .sorted { $0.size > $1.size }
+            return matching.isEmpty ? nil : FindingGroup(kind: kind, items: matching)
+        }
+    }
+
+    private var totalSize: Int64 { allItems.reduce(0) { $0 + $1.size } }
+
+    var body: some View {
+        ScreenChrome(title: "Scrub 99", subtitle: "Findings") {
+            VStack(spacing: 0) {
+                header
+                Rectangle().fill(style.border.opacity(0.5)).frame(height: 1)
+
+                if allItems.isEmpty {
+                    nothingFound
+                } else {
+                    HSplitView {
+                        sidebar
+                        DetailPane(item: appState.inspectedItem)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                Rectangle().fill(style.border.opacity(0.5)).frame(height: 1)
+                ActionBar()
             }
         }
-        .padding(34)
-        .scrubGlassPanel()
-        .padding()
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(allItems.isEmpty
+                     ? "Nothing to clean"
+                     : "Found \(allItems.count) thing\(allItems.count == 1 ? "" : "s") worth reviewing")
+                    .font(style.titleFont)
+                    .foregroundStyle(style.text)
+
+                Spacer()
+
+                if !allItems.isEmpty {
+                    Text("\(totalSize.sizeDescription) in total")
+                        .font(style.bodyFont)
+                        .foregroundStyle(style.secondaryText)
+                }
+            }
+
+            Text(measuredLine)
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+
+            notesBanner
+
+            if let error = appState.lastErrorMessage, !error.isEmpty {
+                Text(error)
+                    .font(style.smallFont)
+                    .foregroundStyle(style.negative)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            DisclosureGroup(isExpanded: $showReadingGuide) {
+                readingGuide
+                    .padding(.top, 6)
+            } label: {
+                Text("How to read this list")
+                    .font(style.labelFont)
+                    .foregroundStyle(style.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private var measuredLine: String {
+        guard let results = appState.scanResults else { return "" }
+        let seconds = String(format: "%.1f", results.scanDuration)
+        return "Measured \(results.scannedPaths.count) location\(results.scannedPaths.count == 1 ? "" : "s") in \(seconds) seconds."
+    }
+
+    @ViewBuilder
+    private var notesBanner: some View {
+        let notes = appState.scanResults?.scanNotes ?? []
+        if !notes.isEmpty {
+            let shown = Array(notes.prefix(Self.inlineNoteLimit))
+            let hidden = Array(notes.dropFirst(Self.inlineNoteLimit))
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, note in
+                    noteRow(note)
+                }
+
+                if !hidden.isEmpty {
+                    DisclosureGroup(isExpanded: $showAllNotes) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 5) {
+                                ForEach(Array(hidden.enumerated()), id: \.offset) { _, note in
+                                    noteRow(note)
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
+                        .frame(maxHeight: 120)
+                    } label: {
+                        Text(showAllNotes
+                             ? "Hide these details"
+                             : "Show \(hidden.count) more detail\(hidden.count == 1 ? "" : "s")")
+                            .font(style.labelFont)
+                            .foregroundStyle(style.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(style.rowSelection.opacity(0.45))
+        }
+    }
+
+    private func noteRow(_ note: ScanResults.ScanNote) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(note.phase)
+            Text(note.message)
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var readingGuide: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            guideRow(
+                icon: "checkmark.seal.fill",
+                colour: style.positive,
+                title: "Ready to clean",
+                text: "Scrub 99 is confident this is replaceable — a cache, a log, or residue from something no longer installed. Tick it and it moves to Quarantine."
+            )
+            guideRow(
+                icon: "exclamationmark.triangle.fill",
+                colour: style.caution,
+                title: "Inspect only",
+                text: "This might be disposable, but Scrub 99 cannot prove it. Tick it and you will be asked to type a confirmation before anything moves."
+            )
+            guideRow(
+                icon: "lock.fill",
+                colour: style.secondaryText,
+                title: "Leave it alone",
+                text: "This is your data, a credential, or something a program still needs. Scrub 99 has made it impossible to tick, on purpose."
+            )
+            guideRow(
+                icon: "checkmark.square",
+                colour: style.text,
+                title: "The tick box",
+                text: "Nothing is ever pre-ticked. Every item in the list starts unticked and stays that way unless you tick it."
+            )
+        }
+    }
+
+    private func guideRow(icon: String, colour: Color, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(colour)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(style.labelFont).foregroundStyle(style.text)
+                Text(text).font(style.smallFont).foregroundStyle(style.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(style.secondaryText)
+                TextField("Filter by name or path", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(style.bodyFont)
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(style.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .helpIfPresent("Clear the filter")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            Rectangle().fill(style.border.opacity(0.5)).frame(height: 1)
+
+            if groups.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("Nothing matches “\(query)”.")
+                        .font(style.bodyFont)
+                        .foregroundStyle(style.secondaryText)
+                    ThemeButton(
+                        title: "Clear the filter",
+                        help: "Show every result again. The filter only hides rows — it never changes what was found, what it is, or what is ticked."
+                    ) { query = "" }
+                        .padding(.top, 8)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        ForEach(groups) { group in
+                            Section {
+                                ForEach(group.items) { item in
+                                    FindingRow(item: item)
+                                }
+                            } header: {
+                                GroupHeader(kind: group.kind, items: group.items)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 440, idealWidth: 500)
+        .background(style.isRetro ? style.rowBackground : Color.clear)
+    }
+
+    private var nothingFound: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "checkmark.seal")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(style.positive)
+            Text("There is nothing here Scrub 99 can offer to clean.")
+                .font(style.titleFont)
+                .foregroundStyle(style.text)
+            Text(appState.deepSweep
+                 ? "Every rule Scrub 99 has came back empty, and the deep sweep found nothing outside them either. Your Mac is already tidy — or the remaining clutter is somewhere Scrub 99 has no rule for."
+                 : "Every rule Scrub 99 has came back empty. Turning on the deep sweep would also measure folders no rule describes, which is often where the real leftovers are.")
+                .font(style.bodyFont)
+                .foregroundStyle(style.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+        .padding(24)
+        .frame(maxWidth: 620, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
-private struct ScrubGlassPanelModifier: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(
-                    .regular,
-                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-                )
-        } else {
-            content
-                .background(
-                    .ultraThinMaterial,
-                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-                )
+private struct GroupHeader: View {
+    @Environment(\.uiStyle) private var style
+    let kind: FindingKind
+    let items: [FoundItem]
+
+    private var total: Int64 { items.reduce(0) { $0 + $1.size } }
+
+    /// How many in this group have sat untouched long enough to look abandoned.
+    /// The single most useful number for spotting a phantom from a bygone year.
+    private var staleCount: Int { items.filter { $0.lastUsedIsStale }.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: kind.iconName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(style.text)
+                Text(kind.rawValue)
+                    .font(style.labelFont)
+                    .foregroundStyle(style.text)
+                Text("\(items.count)")
+                    .font(style.smallFont)
+                    .foregroundStyle(style.secondaryText)
+                if staleCount > 0 {
+                    Text("· \(staleCount) not used in over \(FoundItem.staleAfterDays / 30) months")
+                        .font(style.smallFont)
+                        .foregroundStyle(style.caution)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(total.sizeDescription)
+                    .font(style.labelFont)
+                    .foregroundStyle(style.text)
+            }
+            Text(kind.tagline)
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(style.groupingBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(style.border.opacity(0.45)).frame(height: 1)
         }
     }
 }
 
-private extension View {
-    func scrubGlassPanel() -> some View {
-        modifier(ScrubGlassPanelModifier())
+private struct FindingRow: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+    let item: FoundItem
+
+    private var assessment: CleanupSafetyPolicy.Assessment {
+        appState.cleanupAssessment(for: item)
+    }
+
+    private var isInspected: Bool { appState.inspectedItemID == item.id }
+
+    /// Says when this was last used, or says plainly that macOS kept no dates for
+    /// it, which is itself useful: an item nobody has touched in years is what the
+    /// reader is looking for.
+    private var ageLabel: String {
+        item.lastUsedDate == nil ? "no dates recorded" : "used \(item.lastUsedDescription)"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if assessment.canBeSelected || item.isSelected {
+                ThemeCheckbox(isChecked: item.isSelected) {
+                    appState.toggleSelection(for: item.id)
+                }
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(style.secondaryText)
+                    .frame(width: 22, height: 22)
+                    .helpIfPresent("Scrub 99 will not clean this. \(assessment.reason)")
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.path.lastPathComponent)
+                    .font(style.bodyFont)
+                    .foregroundStyle(style.text)
+                    .lineLimit(1)
+                // The path is the part that can be cut short; the age is not, so
+                // it keeps its whole width and the path truncates around it.
+                HStack(spacing: 6) {
+                    Text(item.path.deletingLastPathComponent().homeAbbreviatedPath)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    Text(ageLabel)
+                        .fixedSize()
+                        .foregroundStyle(item.lastUsedIsStale ? style.caution : style.secondaryText)
+                }
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(item.size.sizeDescription)
+                    .font(style.bodyFont)
+                    .foregroundStyle(style.text)
+                Text(Verdict.of(assessment.decision).shortLabel)
+                    .font(style.smallFont)
+                    .foregroundStyle(Verdict.of(assessment.decision).colour(in: style))
+            }
+            .frame(width: 104, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isInspected ? style.rowSelection : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture { appState.inspectItem(item.id) }
+        .helpIfPresent(item.path.path)
+    }
+}
+
+// MARK: - Verdict
+
+/// The three things Scrub 99 can say about an item, in the reader's words
+/// rather than its own. Every place a verdict appears goes through here, so the
+/// wording cannot drift apart between the list and the details.
+private enum Verdict {
+    case ready, inspect, leave
+
+    static func of(_ decision: CleanupSafetyPolicy.Decision) -> Verdict {
+        switch decision {
+        case .eligibleForQuarantine: return .ready
+        case .reviewOnly: return .inspect
+        case .blocked: return .leave
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .ready: return "Ready to clean"
+        case .inspect: return "Inspect only"
+        case .leave: return "Leave it alone"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .ready: return "checkmark.seal.fill"
+        case .inspect: return "exclamationmark.triangle.fill"
+        case .leave: return "lock.fill"
+        }
+    }
+
+    func colour(in style: UIStyle) -> Color {
+        switch self {
+        case .ready: return style.positive
+        case .inspect: return style.caution
+        case .leave: return style.secondaryText
+        }
+    }
+}
+
+// MARK: - Details
+
+private struct DetailPane: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+    let item: FoundItem?
+
+    var body: some View {
+        Group {
+            if let item {
+                content(for: item)
+            } else {
+                VStack {
+                    Spacer()
+                    Text("Pick something from the list to see what it is.")
+                        .font(style.bodyFont)
+                        .foregroundStyle(style.secondaryText)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(minWidth: 400, idealWidth: 460)
+    }
+
+    private func content(for item: FoundItem) -> some View {
+        let assessment = appState.cleanupAssessment(for: item)
+        let verdict = Verdict.of(assessment.decision)
+        let guide = item.readerGuide
+
+        return VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(item.path.lastPathComponent)
+                            .font(style.titleFont)
+                            .foregroundStyle(style.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(item.path.deletingLastPathComponent().homeAbbreviatedPath)
+                            .font(style.pathFont)
+                            .foregroundStyle(style.secondaryText)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: verdict.icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(verdict.colour(in: style))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verdict.shortLabel)
+                                .font(style.labelFont)
+                                .foregroundStyle(verdict.colour(in: style))
+                            Text(assessment.reason)
+                                .font(style.bodyFont)
+                                .foregroundStyle(style.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(style.rowSelection.opacity(0.4))
+
+                    section("What this is") {
+                        Text(guide.whatItIs)
+                        Text("Scrub 99 grouped it as “\(item.findingKind.rawValue)” — \(item.findingKind.tagline.lowercased()).")
+                            .foregroundStyle(style.secondaryText)
+                        if item.isUndeclared {
+                            Text("Scrub 99 has no rule that describes this path. It measured it because it lives where undeclared data collects. That is a statement about its rule database, not about whether the contents matter.")
+                                .foregroundStyle(style.caution)
+                        }
+                    }
+
+                    section("Why it is here") {
+                        Text(guide.whyItExists)
+                        Text(item.findingKind.explanation)
+                            .foregroundStyle(style.secondaryText)
+                    }
+
+                    section("Your data in it") {
+                        Text(guide.necessity)
+                    }
+
+                    section("If it is cleaned") {
+                        Text("\(guide.risk.rawValue). \(guide.riskExplanation)")
+                    }
+
+                    section("The facts") {
+                        facts(item)
+                    }
+                }
+                .padding(18)
+            }
+
+            Rectangle().fill(style.border.opacity(0.5)).frame(height: 1)
+
+            HStack(spacing: 10) {
+                ThemeButton(title: "Reveal in Finder", help: "Show this in a Finder window so you can look at it yourself before deciding.") {
+                    NSWorkspace.shared.activateFileViewerSelecting([item.path])
+                }
+
+                // Sits on the left, beside Reveal rather than next to the cleanup
+                // button, because it is the opposite of the cleanup button: it is
+                // how you tell Scrub 99 to stop asking. Labels stay short because
+                // this footer already carries three buttons in a narrow pane; the
+                // help text is where the rules are spelled out.
+                if appState.isProtected(item.path.path) {
+                    ThemeButton(
+                        title: "Offer It Again",
+                        help: "This is on your left-alone list. Pressing this takes it off, which does not clean anything — it just lets Scrub 99 judge this path by its rules again."
+                    ) {
+                        appState.releaseProtection(path: ProtectionList.normalize(item.path).path)
+                    }
+                } else {
+                    ThemeButton(
+                        title: "Leave It Alone",
+                        help: "Adds this path to a list Scrub 99 will not offer again, on this or any later scan, until you take it off. It moves and deletes nothing. Protecting a folder protects everything inside it."
+                    ) {
+                        appState.protect(item)
+                    }
+                }
+
+                Spacer()
+
+                if assessment.canBeSelected {
+                    ThemeButton(
+                        title: item.isSelected ? "Untick" : "Tick for cleanup",
+                        isPrimary: item.isSelected,
+                        help: assessment.requiresProtectedConfirmation
+                            ? "This moves to Quarantine only after you type an extra confirmation."
+                            : "This moves to Scrub 99's Quarantine, where you can put it back."
+                    ) {
+                        appState.toggleSelection(for: item.id)
+                    }
+                } else {
+                    ThemeButton(
+                        title: "Scrub 99 will not touch this",
+                        isEnabled: false,
+                        help: assessment.reason
+                    ) {}
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private func facts(_ item: FoundItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            fact("Size", sizeValue(item))
+            fact("Kind of data", item.category.displayName)
+            fact("Belongs to", item.primaryApplication.map { app in
+                app.isInstalled ? app.name : "\(app.name) — no longer installed"
+            } ?? "Nothing Scrub 99 can name")
+            fact("How sure", item.association.rawValue)
+            fact("Scrub 99's rating", item.safetyLevel.rawValue)
+            fact(
+                "Last used",
+                lastUsedValue(item),
+                colour: item.lastUsedIsStale ? style.caution : nil
+            )
+            if let modified = item.modified {
+                fact("Last changed", modified.formatted(date: .abbreviated, time: .shortened))
+            }
+            fact("Full path", item.path.path, isPath: true)
+        }
+    }
+
+    /// The measured size, or a straight admission that there is no measurement
+    /// to show. A scanner that could not read a size leaves a zero behind, and a
+    /// zero shown as "0 B" reads as a very small thing rather than an unknown one.
+    private func sizeValue(_ item: FoundItem) -> String {
+        item.size == 0
+            ? "Not measured. Scrub 99 could not read a size for this path, so treat it as unknown rather than empty."
+            : item.size.humanReadable
+    }
+
+    /// "Last used" in words, with the honest caveat attached when the figure had
+    /// to come from the change date instead of a recorded access date.
+    private func lastUsedValue(_ item: FoundItem) -> String {
+        guard item.lastUsedDate != nil else {
+            return "Not recorded. macOS keeps no dates for this one, so there is no way to tell how long it has been sitting there."
+        }
+        if item.lastUsedIsRecorded {
+            return item.lastUsedDescription
+        }
+        return "\(item.lastUsedDescription) — worked out from when it last changed, because macOS did not record a separate last-used date."
+    }
+
+    /// One "label: value" line. The label column is sized to the longest label
+    /// ("Scrub 99's rating") so it always stays on one line — a label that wraps
+    /// drops its second word next to the value and reads as part of it.
+    private func fact(
+        _ label: String,
+        _ value: String,
+        isPath: Bool = false,
+        colour: Color? = nil
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(style.smallFont)
+                .foregroundStyle(style.secondaryText)
+                .lineLimit(1)
+                .frame(width: 140, alignment: .leading)
+            Text(value)
+                .font(isPath ? style.pathFont : style.smallFont)
+                .foregroundStyle(colour ?? style.text)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title.uppercased())
+                .font(style.labelFont)
+                .foregroundStyle(style.secondaryText)
+            VStack(alignment: .leading, spacing: 5) {
+                content()
+            }
+            .font(style.bodyFont)
+            .foregroundStyle(style.text)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - Actions
+
+private struct ActionBar: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+
+    private var ticked: [FoundItem] { appState.activeCleanupItems }
+    private var recommended: [FoundItem] { appState.recommendedCleanupItems }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ThemeButton(title: "Scan Again", help: "Run the whole scan from the start.") {
+                appState.startScan()
+            }
+
+            Spacer()
+
+            Text(tickedSummary)
+                .font(style.smallFont)
+                .foregroundStyle(ticked.isEmpty ? style.secondaryText : style.text)
+
+            ThemeButton(
+                title: "What would happen…",
+                isEnabled: !recommended.isEmpty,
+                help: recommended.isEmpty
+                    ? "Scrub 99 found nothing it can recommend cleaning on its own this time, so there is no rehearsal to run."
+                    : "Read, before anything moves, what a cleanup would do with the \(recommended.count) items Scrub 99 recommends: which ones it would move, which ones it would refuse because their application is open right now, and what it would leave alone. Nothing moves and nothing is ticked — it is there to be read."
+            ) {
+                appState.showCleanupPreview = true
+            }
+
+            ThemeButton(
+                title: "Guided cleanup…",
+                isEnabled: !recommended.isEmpty,
+                help: recommended.isEmpty
+                    ? "Scrub 99 found nothing it can recommend cleaning on its own this time."
+                    : "Walk through the \(recommended.count) items Scrub 99 is most confident about, one decision at a time."
+            ) {
+                appState.beginGuidedCleanup()
+            }
+
+            // Enabled for the same reason as the one on the welcome screen: seeing
+            // where Quarantine lives is useful precisely when it is still empty.
+            ThemeButton(
+                title: "Quarantine…",
+                help: appState.hasQuarantineItems
+                    ? "Open Quarantine, where everything you have cleaned waits until you decide."
+                    : "Quarantine is empty, which is a good time to see where it is: a normal folder at \(CleanupEngine().quarantineURL.path). Anything you clean lands there and can be put back."
+            ) {
+                appState.showQuarantineManagement = true
+            }
+
+            // The other side of the same idea: Quarantine is what Scrub 99 took,
+            // Left Alone is what it has agreed never to take. Both stay open when
+            // empty, because knowing the list exists is the useful part.
+            ThemeButton(
+                title: appState.protectionEntries.isEmpty
+                    ? "Left Alone"
+                    : "Left Alone (\(appState.protectionEntries.count))",
+                help: appState.protectionEntries.isEmpty
+                    ? "Nothing is on the left-alone list yet. Open any finding and you can put it there: the paths Scrub 99 should stop offering, on this and every later scan."
+                    : "Open the \(appState.protectionEntries.count) path\(appState.protectionEntries.count == 1 ? "" : "s") you have told Scrub 99 to stop offering. Nothing on that list has been moved or deleted, and any of it can be released."
+            ) {
+                appState.showProtectionList = true
+            }
+
+            ThemeButton(
+                title: ticked.isEmpty ? "Review Ticked…" : "Review Ticked (\(ticked.count))…",
+                isPrimary: true,
+                isEnabled: !ticked.isEmpty,
+                help: ticked.isEmpty
+                    ? "Tick something in the list first. Nothing is ever ticked for you."
+                    : "Review the \(ticked.count) items you ticked before anything moves."
+            ) {
+                appState.showCleanupConfirmation = true
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private var tickedSummary: String {
+        guard !ticked.isEmpty else { return "Nothing ticked yet" }
+        return "Ticked: \(ticked.count) · \(appState.totalReclaimable.sizeDescription)"
+    }
+}
+
+// MARK: - Error
+
+private struct ErrorScreen: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.uiStyle) private var style
+
+    var body: some View {
+        ScreenChrome(title: "Scrub 99", subtitle: "Problem") {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(style.caution)
+                Text("The scan could not finish")
+                    .font(style.titleFont)
+                    .foregroundStyle(style.text)
+                Text(appState.lastErrorMessage ?? "Scrub 99 could not read part of your home folder. Nothing has been changed.")
+                    .font(style.bodyFont)
+                    .foregroundStyle(style.secondaryText)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("This is usually a permissions problem: Scrub 99 needs access to the folders it is measuring. Nothing was moved, so there is nothing to undo.")
+                    .font(style.smallFont)
+                    .foregroundStyle(style.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                HStack {
+                    ThemeButton(
+                        title: "Try Again",
+                        isPrimary: true,
+                        help: "Run the same scan once more. If macOS is refusing a folder rather than the folder being broken, granting access in System Settings → Privacy & Security → Files and Folders and then trying again is usually what fixes it."
+                    ) { appState.startScan() }
+                    ThemeButton(
+                        title: "Back to the Start",
+                        help: "Put the app back on its opening screen without scanning again. Nothing was moved, so there is nothing to undo."
+                    ) { appState.cancelScan() }
+                    Spacer()
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
     }
 }

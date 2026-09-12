@@ -59,6 +59,12 @@ struct FoundItem: Identifiable, Codable, Equatable {
     let explanation: String?
     var tags: [Tag]
 
+    /// True when the sweep measured this path but no rule in the database
+    /// describes it. Such an item can be reported and inspected, but nothing
+    /// states what it contains or whether it can be recreated, so it is never
+    /// eligible for one-click quarantine.
+    var isUndeclared: Bool
+
     // Selection state
     var isSelected: Bool
     var isExpanded: Bool
@@ -79,6 +85,7 @@ struct FoundItem: Identifiable, Codable, Equatable {
         reason: String? = nil,
         explanation: String? = nil,
         tags: [Tag] = [],
+        isUndeclared: Bool = false,
         isSelected: Bool = false,
         isExpanded: Bool = false
     ) {
@@ -97,6 +104,7 @@ struct FoundItem: Identifiable, Codable, Equatable {
         self.reason = reason
         self.explanation = explanation
         self.tags = tags
+        self.isUndeclared = isUndeclared
         self.isSelected = isSelected
         self.isExpanded = isExpanded
     }
@@ -362,6 +370,66 @@ extension Int64 {
             return String(format: "%.1f GB", bytes / (1024 * 1024 * 1024))
         }
     }
+
+    /// The same size, except that nothing at all is not reported as "0 B".
+    ///
+    /// Zero is what the scanner leaves behind when it could not read a size, and
+    /// printing "0 B" for a cache it failed to measure states something false.
+    /// Saying so plainly is the point: an unmeasured item cannot be judged by
+    /// its size, and the reader deserves to know which items those are.
+    var sizeDescription: String {
+        self == 0 ? "Not measured" : humanReadable
+    }
+}
+
+// MARK: - When was this last used?
+
+extension FoundItem {
+    /// Past this age an item reads as a leftover rather than something in use.
+    static let staleAfterDays = 180
+
+    /// The best answer available to "when was this last used?".
+    ///
+    /// macOS keeps a separate access date, and it is the honest signal: it moves
+    /// when something reads the file. But it is recorded lazily and sometimes not
+    /// at all, so this falls back to the change date. `lastUsedIsRecorded` says
+    /// which of the two the reader is being shown.
+    var lastUsedDate: Date? { lastAccessed ?? modified }
+
+    /// False when the date below came from the change date rather than a real
+    /// access date, so the wording can say so instead of overstating it.
+    var lastUsedIsRecorded: Bool { lastAccessed != nil }
+
+    /// Whole days between the last use and today, nil when no date exists at all.
+    var lastUsedDays: Int? {
+        guard let date = lastUsedDate else { return nil }
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: date),
+            to: calendar.startOfDay(for: Date())
+        ).day
+    }
+
+    /// How long ago that was, in the words a person would actually use.
+    var lastUsedDescription: String {
+        guard let days = lastUsedDays else { return "never recorded" }
+        if days <= 0 { return "today" }
+        if days == 1 { return "yesterday" }
+        if days < 7 { return "\(days) days ago" }
+        if days < 14 { return "last week" }
+        if days < 31 { return "\(days / 7) weeks ago" }
+        if days < 61 { return "last month" }
+        if days < 365 { return "\(days / 30) months ago" }
+        if days < 730 { return "over a year ago" }
+        return "\(days / 365) years ago"
+    }
+
+    /// Whether this has sat untouched long enough to look abandoned.
+    var lastUsedIsStale: Bool {
+        guard let days = lastUsedDays else { return false }
+        return days > Self.staleAfterDays
+    }
 }
 
 // MARK: - Reader-facing explanation
@@ -536,5 +604,23 @@ extension FoundItem {
                 riskExplanation: "The consequences cannot be predicted from the current evidence. Inspect it manually and keep an independent backup."
             )
         }
+    }
+}
+
+// MARK: - Path display
+
+extension URL {
+    /// `/Users/Morad/Library/Logs` becomes `~/Library/Logs`. A path outside the
+    /// home directory is returned unchanged.
+    ///
+    /// Every row in the list lives under the same home directory, so that prefix
+    /// says nothing about any one of them — and it is the part that gets dropped
+    /// first when a long path is cut short to fit. Removing it is what lets the
+    /// part that actually differs between two rows survive.
+    var homeAbbreviatedPath: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let full = path
+        guard full == home || full.hasPrefix(home + "/") else { return full }
+        return "~" + full.dropFirst(home.count)
     }
 }

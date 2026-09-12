@@ -5,7 +5,30 @@ import Foundation
 /// preflighted before the first move, and every destination is recorded before
 /// data leaves its original path.
 final class CleanupEngine {
+    /// Quarantine deliberately lives in plain sight. The old location —
+    /// `~/Library/Application Support/Scrub99/Quarantine` — was invisible in
+    /// Finder, so the one place Scrub 99 puts your files was the one place you
+    /// could not look at. Anything Scrub 99 takes now sits in a folder anyone
+    /// can see, open, and pull things back out of by hand.
+    static let quarantineFolderName = "Scrub99 Quarantine"
+
+    /// The plain-language note Scrub 99 leaves inside the quarantine folder.
+    static let quarantineGuideFileName = "READ ME — what is this folder.txt"
+
+    static func quarantineURL(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())) -> URL {
+        homeDirectory.appendingPathComponent(quarantineFolderName, isDirectory: true)
+    }
+
+    /// Where quarantine used to live. Kept only so existing transactions can be
+    /// walked out into the open on first launch.
+    static func legacyQuarantineURL(homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())) -> URL {
+        homeDirectory
+            .appendingPathComponent("Library/Application Support/Scrub99", isDirectory: true)
+            .appendingPathComponent("Quarantine", isDirectory: true)
+    }
+
     let quarantineURL: URL
+    let homeDirectory: URL
 
     private let fileManager: FileManager
     private let safetyPolicy: CleanupSafetyPolicy
@@ -14,12 +37,11 @@ final class CleanupEngine {
 
     init(
         homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory()),
-        applicationSupportURL: URL? = nil,
+        quarantineRoot: URL? = nil,
         fileManager: FileManager = .default
     ) {
-        let appSupport = applicationSupportURL ?? homeDirectory
-            .appendingPathComponent("Library/Application Support/Scrub99", isDirectory: true)
-        self.quarantineURL = appSupport.appendingPathComponent("Quarantine", isDirectory: true)
+        self.homeDirectory = homeDirectory
+        self.quarantineURL = quarantineRoot ?? CleanupEngine.quarantineURL(homeDirectory: homeDirectory)
         self.fileManager = fileManager
         self.safetyPolicy = CleanupSafetyPolicy(
             homeDirectory: homeDirectory,
@@ -38,6 +60,147 @@ final class CleanupEngine {
 
     func assessment(for item: FoundItem) -> CleanupSafetyPolicy.Assessment {
         safetyPolicy.assess(item, fileManager: fileManager)
+    }
+
+    // MARK: - Bringing quarantine into the open
+
+    /// Walks every transaction inside the old hidden quarantine folder out into
+    /// the visible one. Each transaction moves as a whole, and its manifest is
+    /// re-pointed at the new location before the move is considered done — a
+    /// manifest that still names the old path would make its items unrestorable,
+    /// so if the rewrite fails the move is undone rather than left half-finished.
+    ///
+    /// Returns how many transactions were moved. Safe to call on every launch:
+    /// with nothing left to move it does nothing and costs one `fileExists`.
+    @discardableResult
+    func adoptLegacyQuarantineIfNeeded() -> Int {
+        guard !didAdoptLegacyQuarantine else { return 0 }
+
+        let legacyURL = CleanupEngine.legacyQuarantineURL(homeDirectory: homeDirectory)
+        guard legacyURL.standardizedFileURL != quarantineURL.standardizedFileURL,
+              fileManager.fileExists(atPath: legacyURL.path) else { return 0 }
+
+        let transactions = (try? fileManager.contentsOfDirectory(
+            at: legacyURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ))?.filter { url in
+            (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        } ?? []
+
+        guard !transactions.isEmpty else { return 0 }
+        try? fileManager.createDirectory(at: quarantineURL, withIntermediateDirectories: true)
+
+        var movedCount = 0
+        for source in transactions {
+            let destination = quarantineURL.appendingPathComponent(source.lastPathComponent, isDirectory: true)
+            guard !fileManager.fileExists(atPath: destination.path) else { continue }
+
+            do {
+                try fileManager.moveItem(at: source, to: destination)
+            } catch {
+                continue
+            }
+
+            do {
+                try repointManifest(in: destination, from: legacyURL, to: quarantineURL)
+                movedCount += 1
+            } catch {
+                // Leaving it here would strand its items, so put it back where it
+                // came from; it will be picked up on the next launch instead.
+                try? fileManager.moveItem(at: destination, to: source)
+            }
+        }
+
+        // The note left in the old folder describes a folder that is now empty,
+        // so it goes with the items. It is Scrub 99's own note rather than
+        // anything of the user's, and the visible folder gets a fresh one below.
+        let legacyGuide = legacyURL.appendingPathComponent(CleanupEngine.quarantineGuideFileName, isDirectory: false)
+        if fileManager.fileExists(atPath: legacyGuide.path) {
+            try? fileManager.removeItem(at: legacyGuide)
+        }
+        // With the transactions gone the old folder has no reason to exist, and
+        // leaving it behind would keep the hidden path around forever. It is only
+        // removed when it is genuinely empty, so anything unexpected inside it
+        // stays put and is picked up on the next launch instead.
+        if let remaining = try? fileManager.contentsOfDirectory(atPath: legacyURL.path), remaining.isEmpty {
+            try? fileManager.removeItem(at: legacyURL)
+        }
+
+        didAdoptLegacyQuarantine = true
+        writeQuarantineGuide()
+        return movedCount
+    }
+
+    /// Whether this engine instance has already tried the move, so a second
+    /// call does not walk a partly-migrated folder twice.
+    private var didAdoptLegacyQuarantine = false
+
+    /// Rewrites the recorded paths inside a transaction's manifest so they name
+    /// the transaction's new home.
+    ///
+    /// This goes through the model rather than searching and replacing the file's
+    /// text. A text substitution looks tempting and does not work: `JSONEncoder`
+    /// escapes every `/` in a path as `\/`, so a search for a literal
+    /// `/Users/...` prefix matches nothing and the manifest silently keeps naming
+    /// the old location. Reading the manifest, rewriting the two path fields, and
+    /// writing it back through the same coder is exact.
+    private func repointManifest(in transactionURL: URL, from oldRoot: URL, to newRoot: URL) throws {
+        let manifestURL = transactionURL.appendingPathComponent("manifest.json", isDirectory: false)
+        guard fileManager.fileExists(atPath: manifestURL.path) else { return }
+
+        let data = try Data(contentsOf: manifestURL)
+        guard var manifest = try? decoder.decode(DurableManifest.self, from: data) else {
+            throw CleanupError.restoreError("The quarantine record could not be read.")
+        }
+
+        let oldPrefix = oldRoot.standardizedFileURL.path
+        let newPrefix = newRoot.standardizedFileURL.path
+        for index in manifest.items.indices {
+            let current = manifest.items[index].quarantinePath
+            guard current == oldPrefix || current.hasPrefix(oldPrefix + "/") else { continue }
+            manifest.items[index].quarantinePath = newPrefix + current.dropFirst(oldPrefix.count)
+        }
+
+        try save(manifest, to: manifestURL)
+    }
+
+    /// Drops a note in the folder explaining, in plain words, what it is and how
+    /// to get things back out — so someone who finds it in Finder six months
+    /// from now is not left guessing. Rewritten on every launch so its text
+    /// always matches the build that is running.
+    func writeQuarantineGuide() {
+        guard fileManager.fileExists(atPath: quarantineURL.path) else { return }
+        let guideURL = quarantineURL.appendingPathComponent(
+            CleanupEngine.quarantineGuideFileName,
+            isDirectory: false
+        )
+        let text = """
+        Scrub99 Quarantine
+        ==================
+
+        This folder is where Scrub 99 puts things when you clean them.
+
+        Nothing here has been deleted. Every item below is a full copy of what
+        used to be on your Mac, sitting exactly as it was. If you change your
+        mind, open Scrub 99, choose Manage Quarantine, and press Restore: the
+        item goes back to the exact path it came from.
+
+        You can also put things back by hand. Open one of the dated folders,
+        then "Items", and drag what you want back to where it belongs. Scrub 99
+        will not mind — it re-checks what is actually there every time it opens.
+
+        Nothing in here is secret and nothing is hidden. Feel free to look.
+
+        Deleting things from this folder by hand is permanent. Scrub 99 cannot
+        bring something back that it can no longer find. If you want the space
+        back but you are not certain, leave it: this folder is the safety net,
+        and it only costs the space the item already took.
+
+        Each transaction keeps a manifest.json recording where every item came
+        from. That file is how Restore knows the way home. Please leave it alone.
+        """
+        try? Data(text.utf8).write(to: guideURL, options: [.atomic])
     }
 
     func cleanup(
@@ -95,6 +258,7 @@ final class CleanupEngine {
 
         try fileManager.createDirectory(at: itemsURL, withIntermediateDirectories: true)
         try save(manifest, to: manifestURL)
+        writeQuarantineGuide()
 
         var movedItems: [MovedItem] = []
         for index in manifest.items.indices {
@@ -134,8 +298,22 @@ final class CleanupEngine {
     }
 
     func undoLastCleanup() async throws -> RestoreResult {
-        let (manifestURL, loadedManifest) = try loadLatestRestorableManifest()
-        var manifest = loadedManifest
+        let (manifestURL, _) = try loadLatestRestorableManifest()
+        return try await restoreTransaction(at: manifestURL)
+    }
+
+    /// Puts back one recorded cleanup. `undoLastCleanup` is this narrowed to the
+    /// most recent restorable run; the history screen offers it per run. Both
+    /// paths go through here so there is one restore, not two that can drift.
+    func restoreTransaction(_ transaction: CleanupTransaction) async throws -> RestoreResult {
+        try await restoreTransaction(at: transaction.manifestURL)
+    }
+
+    func restoreTransaction(at manifestURL: URL) async throws -> RestoreResult {
+        guard let data = try? Data(contentsOf: manifestURL),
+              var manifest = try? decoder.decode(DurableManifest.self, from: data) else {
+            throw CleanupError.restoreError("The record of this cleanup could not be read.")
+        }
         var restoredItems: [RestoredItem] = []
 
         for index in manifest.items.indices {
@@ -234,6 +412,46 @@ final class CleanupEngine {
         }
     }
 
+    /// Every cleanup Scrub 99 has run on this Mac, newest first, rebuilt from the
+    /// records on disk. An item the record says was moved but which is no longer
+    /// in the folder is reported as gone rather than waiting — otherwise this
+    /// screen would promise to put back something the folder does not have, and
+    /// "still waiting" would disagree with the Quarantine list beside it.
+    func transactionHistory() -> [CleanupTransaction] {
+        guard let manifests = try? manifestURLs() else { return [] }
+        return manifests.compactMap { manifestURL in
+            guard let data = try? Data(contentsOf: manifestURL),
+                  let manifest = try? decoder.decode(DurableManifest.self, from: data) else { return nil }
+            return CleanupTransaction(
+                id: manifest.id,
+                date: manifest.date,
+                items: manifest.items.map { item in
+                    CleanupTransaction.Item(
+                        id: item.id,
+                        originalPath: item.originalPath,
+                        size: item.size,
+                        category: item.category,
+                        appName: item.appName,
+                        state: {
+                            switch item.state {
+                            case .moved:
+                                return fileManager.fileExists(atPath: item.quarantinePath) ? .waiting : .gone
+                            case .restored:
+                                return .putBack
+                            case .purged:
+                                return .deletedForever
+                            case .planned, .failed:
+                                return .neverMoved
+                            }
+                        }()
+                    )
+                },
+                manifestURL: manifestURL
+            )
+        }
+        .sorted { $0.date > $1.date }
+    }
+
     func restore(_ entry: QuarantineEntry) throws {
         guard let loaded = loadManifest(containing: entry) else {
             throw CleanupError.restoreError("The quarantine record could not be found.")
@@ -292,8 +510,26 @@ final class CleanupEngine {
         return PermanentDeletionResult(deleted: deleted, failed: failed)
     }
 
+    /// Opens Finder at the folder holding one batch, with its record beside the
+    /// items. Reading that record is the point: it is the same file the history
+    /// screen reads, and anyone can check the app against it.
+    func revealTransaction(_ transaction: CleanupTransaction) {
+        NSWorkspace.shared.activateFileViewerSelecting([transaction.manifestURL.deletingLastPathComponent()])
+    }
+
     func revealQuarantine() {
-        NSWorkspace.shared.activateFileViewerSelecting([quarantineURL])
+        // Before anything has been cleaned there is no folder to select, and
+        // opening Finder on a path that does not exist shows the user nothing.
+        // Home is one step away from where quarantine will appear, so show that
+        // and say so in the UI rather than failing silently.
+        let target = fileManager.fileExists(atPath: quarantineURL.path)
+            ? quarantineURL
+            : homeDirectory
+        NSWorkspace.shared.activateFileViewerSelecting([target])
+    }
+
+    var quarantineExists: Bool {
+        fileManager.fileExists(atPath: quarantineURL.path)
     }
 
     private func loadManifest(containing entry: QuarantineEntry) -> (URL, DurableManifest)? {
@@ -310,13 +546,35 @@ final class CleanupEngine {
         for app in items.compactMap(\.primaryApplication) {
             if let bundleIdentifier = app.bundleIdentifier, runningIDs.contains(bundleIdentifier) {
                 matches.insert(app)
-            } else if running.contains(where: {
-                $0.localizedName?.localizedCaseInsensitiveContains(app.name) == true
-            }) {
+            } else if running.contains(where: { CleanupEngine.ownerName(app.name, describes: $0.localizedName) }) {
                 matches.insert(app)
             }
         }
         return matches.sorted { $0.name < $1.name }
+    }
+
+    /// Whether a running process is the application that owns an item.
+    ///
+    /// This is used only when the owner has no bundle identifier to compare, and
+    /// it used to be `localizedName.contains(owner)`. A substring test over every
+    /// running process is not a name check: a folder called `log` matched
+    /// `loginwindow`, which is always running, so those items were refused on
+    /// every scan, forever, with an explanation that was not true. `NGL` matched
+    /// `Single Sign-On` and eight other processes the same way.
+    ///
+    /// A running process counts as the owner when it *is* the application, or
+    /// when it belongs to it and says so at the front of its name — `Google
+    /// Chrome Helper (Renderer)` belongs to `Google Chrome`. Both forms are
+    /// anchored and ended by a word boundary, so a match has to be the name
+    /// rather than a coincidence of spelling.
+    static func ownerName(_ owner: String, describes runningName: String?) -> Bool {
+        guard let runningName else { return false }
+        let owner = owner.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !owner.isEmpty else { return false }
+        let name = runningName.lowercased()
+
+        if name == owner { return true }
+        return name.hasPrefix(owner) && name.dropFirst(owner.count).first == " "
     }
 
     var hasQuarantineItems: Bool {
@@ -399,7 +657,9 @@ private struct DurableItem: Codable {
 
     let id: UUID
     let originalPath: String
-    let quarantinePath: String
+    /// Mutable because adopting an older quarantine folder relocates a whole
+    /// transaction and has to re-point this at the item's new home.
+    var quarantinePath: String
     let size: Int64
     let category: String
     let appName: String?

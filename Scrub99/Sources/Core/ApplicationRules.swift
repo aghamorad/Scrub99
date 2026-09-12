@@ -72,17 +72,24 @@ struct KnownPath: Codable {
     /// This is intended for user workspaces where a single aggregate total is
     /// accurate but not useful enough to review.
     let inventoryDepth: Int?
+    /// Description used for the individual children when `inventoryDepth` is 1.
+    /// A root like `Library/Application Support/Google` holds several unrelated
+    /// folders, so repeating the root's description on each child would describe
+    /// at least some of them incorrectly. Falls back to `description`.
+    let inventoryDescription: String?
 
     init(
         relativePath: String,
         category: ItemCategory,
         description: String,
-        inventoryDepth: Int? = nil
+        inventoryDepth: Int? = nil,
+        inventoryDescription: String? = nil
     ) {
         self.relativePath = relativePath
         self.category = category
         self.description = description
         self.inventoryDepth = inventoryDepth
+        self.inventoryDescription = inventoryDescription
     }
 
     /// Expand a relative path to a full URL.

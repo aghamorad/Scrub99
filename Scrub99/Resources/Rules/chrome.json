@@ -1,0 +1,48 @@
+{
+  "name": "Google Chrome",
+  "bundleIdentifier": "com.google.Chrome",
+  "executableName": "Google Chrome",
+  "knownPaths": [
+    {
+      "relativePath": "Library/Application Support/Google",
+      "category": "applicationData",
+      "description": "Your Chrome profile: history, bookmarks, saved logins, cookies, extensions, and per-site storage. This is not disposable. Moving it signs you out of everything and can lose local-only data.",
+      "inventoryDepth": 1,
+      "inventoryDescription": "A Google-owned folder inside Application Support. Google stores unrelated things side by side here — the Chrome profile, the Google Drive filesystem cache, and the auto-updater — so read the folder name before assuming this is browser data."
+    },
+    {
+      "relativePath": "Library/Caches/Google",
+      "category": "cache",
+      "description": "Chrome's own download and network caches. Regenerates as you browse."
+    },
+    {
+      "relativePath": "Library/HTTPStorages/com.google.Chrome",
+      "category": "applicationData",
+      "description": "Chrome HTTP storage and cookies. Session state, not disposable cache."
+    },
+    {
+      "relativePath": "Library/Saved Application State/com.google.Chrome.savedState",
+      "category": "applicationData",
+      "description": "Saved window state, used to restore your windows after a restart."
+    },
+    {
+      "relativePath": "Library/Preferences/com.google.Chrome.plist",
+      "category": "preferences",
+      "description": "Chrome preferences."
+    }
+  ],
+  "filePatterns": [],
+  "keywords": [
+    "google chrome",
+    "chromium",
+    "com.google.chrome"
+  ],
+  "confidenceBoosters": [
+    "bundleIdMatch",
+    "appNameMatch"
+  ],
+  "installMethod": "directDownload",
+  "homepageURL": "https://www.google.com/chrome/",
+  "category": "other",
+  "description": "Google Chrome browser profile and caches."
+}

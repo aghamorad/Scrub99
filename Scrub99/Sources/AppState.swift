@@ -9,30 +9,109 @@ final class AppState: ObservableObject {
     @Published var scanState: ScanState = .idle
     @Published var scanProgress: ScanProgress = .idle  // Changed from .none to .idle
     @Published var scanResults: ScanResults?
-    @Published var selectedCategory: Category?
     @Published var showCleanupConfirmation = false
     @Published var cleanupHistory: [CleanupRecord] = []
     @Published var currentTheme: Theme
     @Published var lastErrorMessage: String?
     @Published var inspectedItemID: UUID?
-    @Published var hasQuarantineItems = CleanupEngine().hasQuarantineItems
+    /// Set at the end of `init`, after any quarantine left in the old hidden
+    /// folder has been walked out into the visible one. A property initializer
+    /// here would run before that move and report the wrong answer.
+    @Published var hasQuarantineItems = false
     @Published var showQuarantineManagement = false
     @Published var showGuidedCleanup = false
+    /// The rehearsal sheet: what a cleanup would do, said before anything does it.
+    @Published var showCleanupPreview = false
     @Published var guidedCleanupItems: [FoundItem] = []
+    /// When on, the scan also measures folders no rule describes. It is the
+    /// difference between "nothing else to clean" and "4 GB in places I have no
+    /// rule for", so it defaults to on and the cost is disclosed before the scan.
+    @Published var deepSweep: Bool
+    /// The paths the reader has asked Scrub 99 to stop offering, loaded once at
+    /// launch. Published so the lists, counts, and veredicts that depend on it
+    /// redraw the moment it changes.
+    @Published private(set) var protectionEntries: [ProtectionList.Entry] = []
+    @Published var showProtectionList = false
 
-    private let cleanupSafetyPolicy = CleanupSafetyPolicy()
+    let protectionList: ProtectionList
+    /// Rebuilt only when the list changes, and only ever read. Caching it here
+    /// keeps a per-row assessment from re-deriving the whole list on every redraw.
+    private var cleanupSafetyPolicy = CleanupSafetyPolicy()
     private var scanTask: Task<Void, Never>?
     private var scanWorkerTask: Task<ScanResults, Error>?
 
     init() {
         let storedTheme = UserDefaults.standard.string(forKey: "scrub99.theme")
         currentTheme = Theme(rawValue: storedTheme ?? "") ?? .classic9
+
+        let storedSweep = UserDefaults.standard.object(forKey: "scrub99.deepSweep") as? Bool
+        deepSweep = storedSweep ?? true
+
+        protectionList = ProtectionList()
+        protectionEntries = protectionList.entries
+        cleanupSafetyPolicy = CleanupSafetyPolicy(protectedPaths: protectionEntries.map(\.path))
+
+        // Anything quarantined by an older build sits in a hidden folder. Move
+        // it somewhere visible before anything reads the quarantine folder, so
+        // the first screen the user sees already reflects the real contents.
+        let engine = CleanupEngine()
+        engine.adoptLegacyQuarantineIfNeeded()
+        hasQuarantineItems = engine.hasQuarantineItems
+    }
+
+    // MARK: - Leaving things alone
+
+    /// Whether this path is one the reader has taken off the table, either itself
+    /// or by protecting a folder above it. Answered by the same policy that makes
+    /// the cleanup decision, so the button and the refusal cannot disagree.
+    func isProtected(_ path: String) -> Bool {
+        cleanupSafetyPolicy.isProtected(ProtectionList.normalize(URL(fileURLWithPath: path)))
+    }
+
+    /// Puts an item on the left-alone list and takes it out of the current
+    /// selection, so a ticked row cannot be protected and cleaned in the same
+    /// breath.
+    func protect(_ item: FoundItem) {
+        guard protectionList.protect(path: item.path.path, kind: item.findingKind.rawValue) else { return }
+        applyProtectionChange()
+        guard var results = scanResults,
+              let index = results.foundItems.firstIndex(where: { $0.id == item.id }) else { return }
+        results.foundItems[index].isSelected = false
+        scanResults = results
+    }
+
+    /// Takes one entry off the list. Keyed on the entry's own stored path rather
+    /// than a live scan result, so a path that nothing was found at this time can
+    /// still be released.
+    func releaseProtection(path: String) {
+        guard protectionList.release(path: path) else { return }
+        applyProtectionChange()
+    }
+
+    func releaseAllProtection() {
+        guard !protectionList.isEmpty else { return }
+        protectionList.releaseAll()
+        applyProtectionChange()
+    }
+
+    /// The one place the list and the policy are brought back into step. Every
+    /// mutation goes through here, so there is no path that changes one and
+    /// leaves the other describing the previous answer.
+    private func applyProtectionChange() {
+        protectionEntries = protectionList.entries
+        cleanupSafetyPolicy = CleanupSafetyPolicy(protectedPaths: protectionEntries.map(\.path))
     }
 
     func setTheme(_ theme: Theme) {
         guard currentTheme != theme else { return }
         currentTheme = theme
         UserDefaults.standard.set(theme.rawValue, forKey: "scrub99.theme")
+    }
+
+    func setDeepSweep(_ enabled: Bool) {
+        guard deepSweep != enabled else { return }
+        deepSweep = enabled
+        UserDefaults.standard.set(enabled, forKey: "scrub99.deepSweep")
     }
 
     enum ScanState: String, Codable {
@@ -79,6 +158,9 @@ final class AppState: ObservableObject {
     func startScan() {
         scanTask?.cancel()
         lastErrorMessage = nil
+        // A scan is the moment the disk is read again, so anything the policy
+        // worked out about what lives where has to be worked out again too.
+        cleanupSafetyPolicy.invalidateWorkingCopyMemo()
         scanResults = nil
         scanProgress = .phase("Preparing scan...")
         scanState = .scanning
@@ -87,9 +169,10 @@ final class AppState: ObservableObject {
             RuleEngine.shared.loadRules()
         }
         let applications = RuleEngine.shared.applications
+        let sweep = deepSweep
 
         let worker = Task.detached(priority: .userInitiated) { [weak self] in
-            let scanner = Scanner(applications: applications)
+            let scanner = Scanner(applications: applications, deepSweep: sweep)
             return try await scanner.scan { [weak self] progress in
                 Task { @MainActor [weak self] in
                     guard self?.scanState == .scanning else { return }
@@ -177,6 +260,24 @@ final class AppState: ObservableObject {
         CleanupEngine().quarantineEntries()
     }
 
+    func transactionHistory() -> [CleanupTransaction] {
+        CleanupEngine().transactionHistory()
+    }
+
+    /// Puts back one recorded batch. It deliberately does not start a scan: the
+    /// history screen sits over the main window, and a scan firing behind it
+    /// would be more disruptive than the staleness it fixes. The items that come
+    /// back simply reappear on the next scan.
+    func restoreTransaction(_ transaction: CleanupTransaction) async {
+        do {
+            lastErrorMessage = nil
+            _ = try await CleanupEngine().restoreTransaction(transaction)
+            refreshQuarantineAvailability()
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
     func restoreQuarantineEntry(_ entry: QuarantineEntry) {
         do {
             try CleanupEngine().restore(entry)
@@ -232,12 +333,4 @@ extension AppState {
             }
         }
     }
-}
-
-enum Category: String, CaseIterable {
-    case all = "All Items", cache = "Cache", logs = "Logs", downloadedModels = "Downloaded Models"
-    case applicationData = "Application Data", preferences = "Preferences"
-    case conversationData = "Conversation / History Data"
-    case credentials = "Credentials / API Configuration", projectData = "Project Data"
-    case pythonEnvironment = "Python Environment", shared = "Shared Resource", unknown = "Unknown"
 }

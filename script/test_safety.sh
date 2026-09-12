@@ -33,9 +33,9 @@ mkdir -p "$BUILD_DIR/ModuleCache"
   "$ROOT_DIR/Scrub99/Sources/Scanner/BoundedScanner.swift" \
   "$ROOT_DIR/Scrub99/Sources/Classifier/Classifier.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafetyPolicy.swift" \
+  "$ROOT_DIR/Scrub99/Sources/Cleanup/ProtectionList.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/CleanupModels.swift" \
   "$ROOT_DIR/Scrub99/Sources/Cleanup/SafeCleanupEngine.swift" \
-  "$ROOT_DIR/Scrub99/Sources/UI/ResultsSorting.swift" \
   "$ROOT_DIR/Scrub99Tests/SafetyTests.swift" \
   -o "$BUILD_DIR/Scrub99SafetyTests"
 
