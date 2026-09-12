@@ -241,7 +241,10 @@ private struct WelcomeScreen: View {
 
     private var footer: some View {
         HStack(alignment: .center) {
-            Text("Version 0.4.0")
+            // Read from the bundle rather than written here: this line, the one
+            // in Settings, and Info.plist all used to carry their own copy of the
+            // version, so a release could ship with the app naming the wrong one.
+            Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")")
                 .font(style.smallFont)
                 .foregroundStyle(style.secondaryText)
             Spacer()

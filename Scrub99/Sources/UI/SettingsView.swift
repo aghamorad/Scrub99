@@ -62,7 +62,7 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("App", value: "Scrub 99")
-                LabeledContent("Version", value: "0.4.0")
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")
                 LabeledContent("Rules loaded", value: "\(RuleEngine.shared.applications.count)")
                 LabeledContent("Purpose", value: "Find storage, explain it, and move nothing without you.")
             }
